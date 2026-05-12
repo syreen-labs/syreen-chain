@@ -12,7 +12,7 @@ import (
 // ---------------------------------------------------------------------------
 
 type MsgCreateSmartAccountResponse struct {
-	Address string `json:"address"`
+	Address string `protobuf:"bytes,1,opt,name=address,proto3" json:"address"`
 }
 
 func (m *MsgCreateSmartAccountResponse) ProtoMessage()  {}

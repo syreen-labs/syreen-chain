@@ -14,13 +14,13 @@ var EmptyEthAddress = common.Address{}
 
 // MsgEthereumTx wraps an Ethereum transaction for Cosmos SDK processing
 type MsgEthereumTx struct {
-	From     string `json:"from"`      // cosmos bech32 sender
-	To       string `json:"to"`        // hex destination (empty for contract creation)
-	Value    string `json:"value"`     // amount in usyreen
-	GasLimit uint64 `json:"gas_limit"` // gas limit
-	Data     string `json:"data"`      // hex-encoded calldata or contract bytecode
-	Nonce    uint64 `json:"nonce"`     // EVM nonce
-	RawTxHex string `json:"raw_tx_hex,omitempty"` // RLP-encoded signed Ethereum tx (set by eth_sendRawTransaction)
+	From     string `protobuf:"bytes,1,opt,name=from,proto3" json:"from"`
+	To       string `protobuf:"bytes,2,opt,name=to,proto3" json:"to"`
+	Value    string `protobuf:"bytes,3,opt,name=value,proto3" json:"value"`
+	GasLimit uint64 `protobuf:"varint,4,opt,name=gas_limit,json=gasLimit,proto3" json:"gas_limit"`
+	Data     string `protobuf:"bytes,5,opt,name=data,proto3" json:"data"`
+	Nonce    uint64 `protobuf:"varint,6,opt,name=nonce,proto3" json:"nonce"`
+	RawTxHex string `protobuf:"bytes,7,opt,name=raw_tx_hex,json=rawTxHex,proto3" json:"raw_tx_hex,omitempty"`
 }
 
 // MaxTxGasLimit is the maximum gas limit for a single EVM transaction (30M)
@@ -90,10 +90,10 @@ func (msg *MsgEthereumTx) GetToAddress() *common.Address {
 
 // MsgEthereumTxResponse is the response from executing an EVM transaction (H3)
 type MsgEthereumTxResponse struct {
-	GasUsed         uint64 `json:"gas_used"`
-	VmError         string `json:"vm_error,omitempty"`
-	ReturnData      string `json:"return_data,omitempty"`
-	ContractAddress string `json:"contract_address,omitempty"`
+	GasUsed         uint64 `protobuf:"varint,1,opt,name=gas_used,json=gasUsed,proto3" json:"gas_used"`
+	VmError         string `protobuf:"bytes,2,opt,name=vm_error,json=vmError,proto3" json:"vm_error,omitempty"`
+	ReturnData      string `protobuf:"bytes,3,opt,name=return_data,json=returnData,proto3" json:"return_data,omitempty"`
+	ContractAddress string `protobuf:"bytes,4,opt,name=contract_address,json=contractAddress,proto3" json:"contract_address,omitempty"`
 }
 
 // DecodeHexData decodes hex-encoded data, stripping 0x prefix if present

@@ -16,9 +16,9 @@ const (
 
 // MsgStake stakes LP tokens into a farming pool
 type MsgStake struct {
-	Sender string   `json:"sender"`
-	PoolID uint64   `json:"pool_id"`
-	Amount math.Int `json:"amount"`
+	Sender string   `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	PoolID uint64   `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id"`
+	Amount math.Int `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount"`
 }
 
 func (msg MsgStake) ValidateBasic() error {
@@ -33,9 +33,9 @@ func (msg MsgStake) ValidateBasic() error {
 
 // MsgUnstake removes LP tokens from a farming pool
 type MsgUnstake struct {
-	Sender string   `json:"sender"`
-	PoolID uint64   `json:"pool_id"`
-	Amount math.Int `json:"amount"`
+	Sender string   `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	PoolID uint64   `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id"`
+	Amount math.Int `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount"`
 }
 
 func (msg MsgUnstake) ValidateBasic() error {
@@ -50,8 +50,8 @@ func (msg MsgUnstake) ValidateBasic() error {
 
 // MsgClaimReward claims pending farming rewards
 type MsgClaimReward struct {
-	Sender string `json:"sender"`
-	PoolID uint64 `json:"pool_id"`
+	Sender string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	PoolID uint64 `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id"`
 }
 
 func (msg MsgClaimReward) ValidateBasic() error {
@@ -63,12 +63,12 @@ func (msg MsgClaimReward) ValidateBasic() error {
 
 // MsgCreateFarm creates a new farming pool (governance or authority only)
 type MsgCreateFarm struct {
-	Authority      string   `json:"authority"`
-	PoolID         uint64   `json:"pool_id"`
-	LPDenom        string   `json:"lp_denom"`         // LP token denom from DEX pool (required)
-	RewardPerBlock math.Int `json:"reward_per_block"`
-	StartBlock     int64    `json:"start_block"`
-	EndBlock       int64    `json:"end_block"` // 0 = no end
+	Authority      string   `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority"`
+	PoolID         uint64   `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id"`
+	LPDenom        string   `protobuf:"bytes,3,opt,name=lp_denom,json=lpDenom,proto3" json:"lp_denom"`
+	RewardPerBlock math.Int `protobuf:"bytes,4,opt,name=reward_per_block,json=rewardPerBlock,proto3" json:"reward_per_block"`
+	StartBlock     int64    `protobuf:"varint,5,opt,name=start_block,json=startBlock,proto3" json:"start_block"`
+	EndBlock       int64    `protobuf:"varint,6,opt,name=end_block,json=endBlock,proto3" json:"end_block"`
 }
 
 func (msg MsgCreateFarm) ValidateBasic() error {
@@ -86,10 +86,10 @@ func (msg MsgCreateFarm) ValidateBasic() error {
 
 // MsgUpdateFarm updates a farming pool reward rate
 type MsgUpdateFarm struct {
-	Authority      string   `json:"authority"`
-	PoolID         uint64   `json:"pool_id"`
-	RewardPerBlock math.Int `json:"reward_per_block"`
-	Active         bool     `json:"active"`
+	Authority      string   `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority"`
+	PoolID         uint64   `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id"`
+	RewardPerBlock math.Int `protobuf:"bytes,3,opt,name=reward_per_block,json=rewardPerBlock,proto3" json:"reward_per_block"`
+	Active         bool     `protobuf:"varint,4,opt,name=active,proto3" json:"active"`
 }
 
 func (msg MsgUpdateFarm) ValidateBasic() error {
@@ -101,15 +101,15 @@ func (msg MsgUpdateFarm) ValidateBasic() error {
 
 // Response types
 type MsgStakeResponse struct {
-	PendingReward math.Int `json:"pending_reward"`
+	PendingReward math.Int `protobuf:"bytes,1,opt,name=pending_reward,json=pendingReward,proto3" json:"pending_reward"`
 }
 
 type MsgUnstakeResponse struct {
-	ClaimedReward math.Int `json:"claimed_reward"`
+	ClaimedReward math.Int `protobuf:"bytes,1,opt,name=claimed_reward,json=claimedReward,proto3" json:"claimed_reward"`
 }
 
 type MsgClaimRewardResponse struct {
-	Amount math.Int `json:"amount"`
+	Amount math.Int `protobuf:"bytes,1,opt,name=amount,proto3" json:"amount"`
 }
 
 type MsgCreateFarmResponse struct{}

@@ -9,12 +9,12 @@ import (
 
 // MsgRecordTrade records a trade event for portfolio tracking
 type MsgRecordTrade struct {
-	Sender    string   `json:"sender"`
-	TradeType string   `json:"trade_type"`
-	Denom     string   `json:"denom"`
-	Amount    math.Int `json:"amount"`
-	Price     math.Int `json:"price"`
-	PnL       math.Int `json:"pnl"`
+	Sender    string   `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	TradeType string   `protobuf:"bytes,2,opt,name=trade_type,json=tradeType,proto3" json:"trade_type"`
+	Denom     string   `protobuf:"bytes,3,opt,name=denom,proto3" json:"denom"`
+	Amount    math.Int `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount"`
+	Price     math.Int `protobuf:"bytes,5,opt,name=price,proto3" json:"price"`
+	PnL       math.Int `protobuf:"bytes,6,opt,name=pnl,proto3" json:"pnl"`
 }
 
 func (m *MsgRecordTrade) ValidateBasic() error {
@@ -30,14 +30,14 @@ func (m *MsgRecordTrade) XXX_MessageName() string { return "syreen.portfolio.Msg
 
 // MsgCreateCompetition creates a trading competition
 type MsgCreateCompetition struct {
-	Creator         string   `json:"creator"`
-	Name            string   `json:"name"`
-	StartBlock      int64    `json:"start_block"`
-	EndBlock        int64    `json:"end_block"`
-	PrizeDenom      string   `json:"prize_denom"`
-	PrizePool       math.Int `json:"prize_pool"`
-	EntryFee        math.Int `json:"entry_fee"`
-	MaxParticipants uint64   `json:"max_participants"`
+	Creator         string   `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator"`
+	Name            string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name"`
+	StartBlock      int64    `protobuf:"varint,3,opt,name=start_block,json=startBlock,proto3" json:"start_block"`
+	EndBlock        int64    `protobuf:"varint,4,opt,name=end_block,json=endBlock,proto3" json:"end_block"`
+	PrizeDenom      string   `protobuf:"bytes,5,opt,name=prize_denom,json=prizeDenom,proto3" json:"prize_denom"`
+	PrizePool       math.Int `protobuf:"bytes,6,opt,name=prize_pool,json=prizePool,proto3" json:"prize_pool"`
+	EntryFee        math.Int `protobuf:"bytes,7,opt,name=entry_fee,json=entryFee,proto3" json:"entry_fee"`
+	MaxParticipants uint64   `protobuf:"varint,8,opt,name=max_participants,json=maxParticipants,proto3" json:"max_participants"`
 }
 
 func (m *MsgCreateCompetition) ValidateBasic() error {
@@ -56,8 +56,8 @@ func (m *MsgCreateCompetition) XXX_MessageName() string { return "syreen.portfol
 
 // MsgJoinCompetition joins a trading competition
 type MsgJoinCompetition struct {
-	Sender        string `json:"sender"`
-	CompetitionID uint64 `json:"competition_id"`
+	Sender        string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	CompetitionID uint64 `protobuf:"varint,2,opt,name=competition_id,json=competitionId,proto3" json:"competition_id"`
 }
 
 func (m *MsgJoinCompetition) ValidateBasic() error {
@@ -72,8 +72,8 @@ func (m *MsgJoinCompetition) XXX_MessageName() string { return "syreen.portfolio
 
 // MsgEndCompetition ends a competition and distributes prizes
 type MsgEndCompetition struct {
-	Authority     string `json:"authority"`
-	CompetitionID uint64 `json:"competition_id"`
+	Authority     string `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority"`
+	CompetitionID uint64 `protobuf:"varint,2,opt,name=competition_id,json=competitionId,proto3" json:"competition_id"`
 }
 
 func (m *MsgEndCompetition) ValidateBasic() error {
@@ -88,7 +88,7 @@ func (m *MsgEndCompetition) XXX_MessageName() string { return "syreen.portfolio.
 
 // MsgUpdatePortfolio triggers a portfolio recalculation
 type MsgUpdatePortfolio struct {
-	Sender string `json:"sender"`
+	Sender string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
 }
 
 func (m *MsgUpdatePortfolio) ValidateBasic() error {
@@ -102,13 +102,17 @@ func (m *MsgUpdatePortfolio) String() string { return fmt.Sprintf("MsgUpdatePort
 func (m *MsgUpdatePortfolio) XXX_MessageName() string { return "syreen.portfolio.MsgUpdatePortfolio" }
 
 // Response types
-type MsgRecordTradeResponse struct{ TradeID uint64 `json:"trade_id"` }
+type MsgRecordTradeResponse struct {
+	TradeID uint64 `protobuf:"varint,1,opt,name=trade_id,json=tradeId,proto3" json:"trade_id"`
+}
 func (m *MsgRecordTradeResponse) ProtoMessage() {}
 func (m *MsgRecordTradeResponse) Reset() { *m = MsgRecordTradeResponse{} }
 func (m *MsgRecordTradeResponse) String() string { return "MsgRecordTradeResponse" }
 func (m *MsgRecordTradeResponse) XXX_MessageName() string { return "syreen.portfolio.MsgRecordTradeResponse" }
 
-type MsgCreateCompetitionResponse struct{ CompetitionID uint64 `json:"competition_id"` }
+type MsgCreateCompetitionResponse struct {
+	CompetitionID uint64 `protobuf:"varint,1,opt,name=competition_id,json=competitionId,proto3" json:"competition_id"`
+}
 func (m *MsgCreateCompetitionResponse) ProtoMessage() {}
 func (m *MsgCreateCompetitionResponse) Reset() { *m = MsgCreateCompetitionResponse{} }
 func (m *MsgCreateCompetitionResponse) String() string { return "MsgCreateCompetitionResponse" }
@@ -120,13 +124,17 @@ func (m *MsgJoinCompetitionResponse) Reset() { *m = MsgJoinCompetitionResponse{}
 func (m *MsgJoinCompetitionResponse) String() string { return "MsgJoinCompetitionResponse" }
 func (m *MsgJoinCompetitionResponse) XXX_MessageName() string { return "syreen.portfolio.MsgJoinCompetitionResponse" }
 
-type MsgEndCompetitionResponse struct{ Winners []string `json:"winners"` }
+type MsgEndCompetitionResponse struct {
+	Winners []string `protobuf:"bytes,1,rep,name=winners,proto3" json:"winners"`
+}
 func (m *MsgEndCompetitionResponse) ProtoMessage() {}
 func (m *MsgEndCompetitionResponse) Reset() { *m = MsgEndCompetitionResponse{} }
 func (m *MsgEndCompetitionResponse) String() string { return "MsgEndCompetitionResponse" }
 func (m *MsgEndCompetitionResponse) XXX_MessageName() string { return "syreen.portfolio.MsgEndCompetitionResponse" }
 
-type MsgUpdatePortfolioResponse struct{ TotalValue math.Int `json:"total_value"` }
+type MsgUpdatePortfolioResponse struct {
+	TotalValue math.Int `protobuf:"bytes,1,opt,name=total_value,json=totalValue,proto3" json:"total_value"`
+}
 func (m *MsgUpdatePortfolioResponse) ProtoMessage() {}
 func (m *MsgUpdatePortfolioResponse) Reset() { *m = MsgUpdatePortfolioResponse{} }
 func (m *MsgUpdatePortfolioResponse) String() string { return "MsgUpdatePortfolioResponse" }

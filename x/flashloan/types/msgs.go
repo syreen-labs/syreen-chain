@@ -10,9 +10,9 @@ import (
 // MsgFlashLoan borrows tokens from the flash pool, sends to borrower,
 // then checks repayment (principal + fee) at end of handler.
 type MsgFlashLoan struct {
-	Sender string   `json:"sender"`
-	Denom  string   `json:"denom"`
-	Amount math.Int `json:"amount"`
+	Sender string   `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	Denom  string   `protobuf:"bytes,2,opt,name=denom,proto3" json:"denom"`
+	Amount math.Int `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount"`
 }
 
 func (m *MsgFlashLoan) ValidateBasic() error {
@@ -34,9 +34,9 @@ func (m *MsgFlashLoan) XXX_MessageName() string  { return "syreen.flashloan.MsgF
 
 // MsgCreateFlashPool creates a new flash loan pool (authority only)
 type MsgCreateFlashPool struct {
-	Authority string         `json:"authority"`
-	Denom     string         `json:"denom"`
-	FeeRate   math.LegacyDec `json:"fee_rate"`
+	Authority string         `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority"`
+	Denom     string         `protobuf:"bytes,2,opt,name=denom,proto3" json:"denom"`
+	FeeRate   math.LegacyDec `protobuf:"bytes,3,opt,name=fee_rate,json=feeRate,proto3" json:"fee_rate"`
 }
 
 func (m *MsgCreateFlashPool) ValidateBasic() error {
@@ -63,9 +63,9 @@ func (m *MsgCreateFlashPool) XXX_MessageName() string  { return "syreen.flashloa
 
 // MsgFundFlashPool adds liquidity to a flash loan pool
 type MsgFundFlashPool struct {
-	Sender string   `json:"sender"`
-	Denom  string   `json:"denom"`
-	Amount math.Int `json:"amount"`
+	Sender string   `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	Denom  string   `protobuf:"bytes,2,opt,name=denom,proto3" json:"denom"`
+	Amount math.Int `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount"`
 }
 
 func (m *MsgFundFlashPool) ValidateBasic() error {
@@ -87,9 +87,9 @@ func (m *MsgFundFlashPool) XXX_MessageName() string  { return "syreen.flashloan.
 
 // MsgWithdrawFlashPool redeems LP shares from a flash loan pool (H-1 fix).
 type MsgWithdrawFlashPool struct {
-	Sender string   `json:"sender"`
-	Denom  string   `json:"denom"`
-	Shares math.Int `json:"shares"`
+	Sender string   `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	Denom  string   `protobuf:"bytes,2,opt,name=denom,proto3" json:"denom"`
+	Shares math.Int `protobuf:"bytes,3,opt,name=shares,proto3" json:"shares"`
 }
 
 func (m *MsgWithdrawFlashPool) ValidateBasic() error {
@@ -111,7 +111,7 @@ func (m *MsgWithdrawFlashPool) XXX_MessageName() string { return "syreen.flashlo
 
 // Response types
 type MsgFlashLoanResponse struct {
-	Fee math.Int `json:"fee"`
+	Fee math.Int `protobuf:"bytes,1,opt,name=fee,proto3" json:"fee"`
 }
 
 func (m *MsgFlashLoanResponse) ProtoMessage()            {}
@@ -134,7 +134,7 @@ func (m *MsgFundFlashPoolResponse) String() string          { return "MsgFundFla
 func (m *MsgFundFlashPoolResponse) XXX_MessageName() string { return "syreen.flashloan.MsgFundFlashPoolResponse" }
 
 type MsgWithdrawFlashPoolResponse struct {
-	AmountReturned math.Int `json:"amount_returned"`
+	AmountReturned math.Int `protobuf:"bytes,1,opt,name=amount_returned,json=amountReturned,proto3" json:"amount_returned"`
 }
 
 func (m *MsgWithdrawFlashPoolResponse) ProtoMessage()           {}

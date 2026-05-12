@@ -9,11 +9,11 @@ import (
 
 // MsgCreateAgent deploys a new AI agent with initial funding
 type MsgCreateAgent struct {
-	Owner        string       `json:"owner"`
-	Name         string       `json:"name"`
-	StrategyType StrategyType `json:"strategy_type"`
-	Config       AgentConfig  `json:"config"`
-	InitialFunds math.Int     `json:"initial_funds"` // amount in config.InputDenom
+	Owner        string       `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner"`
+	Name         string       `protobuf:"bytes,2,opt,name=name,proto3" json:"name"`
+	StrategyType StrategyType `protobuf:"bytes,3,opt,name=strategy_type,json=strategyType,proto3" json:"strategy_type"`
+	Config       AgentConfig  `protobuf:"bytes,4,opt,name=config,proto3" json:"config"`
+	InitialFunds math.Int     `protobuf:"bytes,5,opt,name=initial_funds,json=initialFunds,proto3" json:"initial_funds"`
 }
 
 func (m *MsgCreateAgent) ValidateBasic() error {
@@ -51,8 +51,8 @@ func (m *MsgCreateAgent) String() string          { return fmt.Sprintf("MsgCreat
 func (m *MsgCreateAgent) XXX_MessageName() string { return "syreen.aiagent.MsgCreateAgent" }
 
 type MsgCreateAgentResponse struct {
-	AgentID      uint64 `json:"agent_id"`
-	AgentAddress string `json:"agent_address"`
+	AgentID      uint64 `protobuf:"varint,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id"`
+	AgentAddress string `protobuf:"bytes,2,opt,name=agent_address,json=agentAddress,proto3" json:"agent_address"`
 }
 
 func (m *MsgCreateAgentResponse) ProtoMessage()           {}
@@ -62,9 +62,9 @@ func (m *MsgCreateAgentResponse) XXX_MessageName() string { return "syreen.aiage
 
 // MsgFundAgent adds funds to an existing agent
 type MsgFundAgent struct {
-	Owner   string   `json:"owner"`
-	AgentID uint64   `json:"agent_id"`
-	Amount  math.Int `json:"amount"`
+	Owner   string   `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner"`
+	AgentID uint64   `protobuf:"varint,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id"`
+	Amount  math.Int `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount"`
 }
 
 func (m *MsgFundAgent) ValidateBasic() error {
@@ -90,9 +90,9 @@ func (m *MsgFundAgentResponse) XXX_MessageName() string { return "syreen.aiagent
 
 // MsgWithdrawAgentFunds withdraws funds from agent back to owner
 type MsgWithdrawAgentFunds struct {
-	Owner   string   `json:"owner"`
-	AgentID uint64   `json:"agent_id"`
-	Amount  math.Int `json:"amount"`
+	Owner   string   `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner"`
+	AgentID uint64   `protobuf:"varint,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id"`
+	Amount  math.Int `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount"`
 }
 
 func (m *MsgWithdrawAgentFunds) ValidateBasic() error {
@@ -110,7 +110,7 @@ func (m *MsgWithdrawAgentFunds) String() string          { return fmt.Sprintf("M
 func (m *MsgWithdrawAgentFunds) XXX_MessageName() string { return "syreen.aiagent.MsgWithdrawAgentFunds" }
 
 type MsgWithdrawAgentFundsResponse struct {
-	AmountReturned math.Int `json:"amount_returned"`
+	AmountReturned math.Int `protobuf:"bytes,1,opt,name=amount_returned,json=amountReturned,proto3" json:"amount_returned"`
 }
 
 func (m *MsgWithdrawAgentFundsResponse) ProtoMessage()           {}
@@ -120,8 +120,8 @@ func (m *MsgWithdrawAgentFundsResponse) XXX_MessageName() string { return "syree
 
 // MsgPauseAgent pauses an active agent
 type MsgPauseAgent struct {
-	Owner   string `json:"owner"`
-	AgentID uint64 `json:"agent_id"`
+	Owner   string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner"`
+	AgentID uint64 `protobuf:"varint,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id"`
 }
 
 func (m *MsgPauseAgent) ValidateBasic() error {
@@ -142,8 +142,8 @@ func (m *MsgPauseAgentResponse) XXX_MessageName() string { return "syreen.aiagen
 
 // MsgResumeAgent resumes a paused agent
 type MsgResumeAgent struct {
-	Owner   string `json:"owner"`
-	AgentID uint64 `json:"agent_id"`
+	Owner   string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner"`
+	AgentID uint64 `protobuf:"varint,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id"`
 }
 
 func (m *MsgResumeAgent) ValidateBasic() error {
@@ -164,9 +164,9 @@ func (m *MsgResumeAgentResponse) XXX_MessageName() string { return "syreen.aiage
 
 // MsgUpdateAgentStrategy updates agent config without redeploying
 type MsgUpdateAgentStrategy struct {
-	Owner   string      `json:"owner"`
-	AgentID uint64      `json:"agent_id"`
-	Config  AgentConfig `json:"config"`
+	Owner   string      `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner"`
+	AgentID uint64      `protobuf:"varint,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id"`
+	Config  AgentConfig `protobuf:"bytes,3,opt,name=config,proto3" json:"config"`
 }
 
 func (m *MsgUpdateAgentStrategy) ValidateBasic() error {

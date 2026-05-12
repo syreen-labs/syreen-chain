@@ -9,13 +9,13 @@ import (
 
 // MsgWriteOption — writer locks collateral and creates an option for sale
 type MsgWriteOption struct {
-	Writer          string         `json:"writer"`
-	PoolID          uint64         `json:"pool_id"`
-	OptionType      OptionType     `json:"option_type"`   // call or put
-	StrikePrice     math.LegacyDec `json:"strike_price"`  // quote per underlying
-	Amount          math.Int       `json:"amount"`        // underlying amount
-	ExpiryBlock     int64          `json:"expiry_block"`
-	CustomPremium   math.Int       `json:"custom_premium"` // 0 = auto-calculate via Black-Scholes
+	Writer        string         `protobuf:"bytes,1,opt,name=writer,proto3" json:"writer"`
+	PoolID        uint64         `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id"`
+	OptionType    OptionType     `protobuf:"bytes,3,opt,name=option_type,json=optionType,proto3" json:"option_type"`
+	StrikePrice   math.LegacyDec `protobuf:"bytes,4,opt,name=strike_price,json=strikePrice,proto3" json:"strike_price"`
+	Amount        math.Int       `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount"`
+	ExpiryBlock   int64          `protobuf:"varint,6,opt,name=expiry_block,json=expiryBlock,proto3" json:"expiry_block"`
+	CustomPremium math.Int       `protobuf:"bytes,7,opt,name=custom_premium,json=customPremium,proto3" json:"custom_premium"`
 }
 
 func (m *MsgWriteOption) ValidateBasic() error {
@@ -42,8 +42,8 @@ func (m *MsgWriteOption) String() string          { return fmt.Sprintf("MsgWrite
 func (m *MsgWriteOption) XXX_MessageName() string { return "syreen.options.MsgWriteOption" }
 
 type MsgWriteOptionResponse struct {
-	OptionID uint64   `json:"option_id"`
-	Premium  math.Int `json:"premium"`
+	OptionID uint64   `protobuf:"varint,1,opt,name=option_id,json=optionId,proto3" json:"option_id"`
+	Premium  math.Int `protobuf:"bytes,2,opt,name=premium,proto3" json:"premium"`
 }
 
 func (m *MsgWriteOptionResponse) ProtoMessage()           {}
@@ -53,8 +53,8 @@ func (m *MsgWriteOptionResponse) XXX_MessageName() string { return "syreen.optio
 
 // MsgBuyOption — buyer pays the premium to acquire the option
 type MsgBuyOption struct {
-	Buyer    string `json:"buyer"`
-	OptionID uint64 `json:"option_id"`
+	Buyer    string `protobuf:"bytes,1,opt,name=buyer,proto3" json:"buyer"`
+	OptionID uint64 `protobuf:"varint,2,opt,name=option_id,json=optionId,proto3" json:"option_id"`
 }
 
 func (m *MsgBuyOption) ValidateBasic() error {
@@ -75,8 +75,8 @@ func (m *MsgBuyOptionResponse) XXX_MessageName() string { return "syreen.options
 
 // MsgExerciseOption — buyer exercises an active option
 type MsgExerciseOption struct {
-	Buyer    string `json:"buyer"`
-	OptionID uint64 `json:"option_id"`
+	Buyer    string `protobuf:"bytes,1,opt,name=buyer,proto3" json:"buyer"`
+	OptionID uint64 `protobuf:"varint,2,opt,name=option_id,json=optionId,proto3" json:"option_id"`
 }
 
 func (m *MsgExerciseOption) ValidateBasic() error {
@@ -89,7 +89,7 @@ func (m *MsgExerciseOption) String() string          { return fmt.Sprintf("MsgEx
 func (m *MsgExerciseOption) XXX_MessageName() string { return "syreen.options.MsgExerciseOption" }
 
 type MsgExerciseOptionResponse struct {
-	Payout math.Int `json:"payout"`
+	Payout math.Int `protobuf:"bytes,1,opt,name=payout,proto3" json:"payout"`
 }
 
 func (m *MsgExerciseOptionResponse) ProtoMessage()           {}
@@ -99,8 +99,8 @@ func (m *MsgExerciseOptionResponse) XXX_MessageName() string { return "syreen.op
 
 // MsgCancelOption — writer cancels an unsold option and reclaims collateral
 type MsgCancelOption struct {
-	Writer   string `json:"writer"`
-	OptionID uint64 `json:"option_id"`
+	Writer   string `protobuf:"bytes,1,opt,name=writer,proto3" json:"writer"`
+	OptionID uint64 `protobuf:"varint,2,opt,name=option_id,json=optionId,proto3" json:"option_id"`
 }
 
 func (m *MsgCancelOption) ValidateBasic() error {

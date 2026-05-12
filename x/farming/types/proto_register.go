@@ -10,6 +10,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
+var fileDescriptorFarmingTx []byte
+
 func init() {
 	registerFarmingProtoFileDescriptors()
 }
@@ -23,58 +25,59 @@ func registerFarmingProtoFileDescriptors() {
 	typeBool := descriptorpb.FieldDescriptorProto_TYPE_BOOL
 
 	fd := &descriptorpb.FileDescriptorProto{
-		Name:    sp("syreen/farming/tx.proto"),
-		Syntax:  sp("proto3"),
-		Package: sp("syreen.farming"),
+		Name:    strp("syreen/farming/tx.proto"),
+		Syntax:  strp("proto3"),
+		Package: strp("syreen.farming"),
 		MessageType: []*descriptorpb.DescriptorProto{
-			{Name: sp("MsgStake"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("sender"), Number: ip(1), Label: &label, Type: &typeString, JsonName: sp("sender")},
-				{Name: sp("pool_id"), Number: ip(2), Label: &label, Type: &typeUint64, JsonName: sp("poolId")},
-				{Name: sp("amount"), Number: ip(3), Label: &label, Type: &typeBytes, JsonName: sp("amount")},
+			{Name: strp("MsgStake"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("sender"), Number: int32p(1), Label: &label, Type: &typeString, JsonName: strp("sender")},
+				{Name: strp("pool_id"), Number: int32p(2), Label: &label, Type: &typeUint64, JsonName: strp("poolId")},
+				{Name: strp("amount"), Number: int32p(3), Label: &label, Type: &typeBytes, JsonName: strp("amount")},
 			}},
-			{Name: sp("MsgStakeResponse"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("pending_reward"), Number: ip(1), Label: &label, Type: &typeBytes, JsonName: sp("pendingReward")},
+			{Name: strp("MsgStakeResponse"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("pending_reward"), Number: int32p(1), Label: &label, Type: &typeBytes, JsonName: strp("pendingReward")},
 			}},
-			{Name: sp("MsgUnstake"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("sender"), Number: ip(1), Label: &label, Type: &typeString, JsonName: sp("sender")},
-				{Name: sp("pool_id"), Number: ip(2), Label: &label, Type: &typeUint64, JsonName: sp("poolId")},
-				{Name: sp("amount"), Number: ip(3), Label: &label, Type: &typeBytes, JsonName: sp("amount")},
+			{Name: strp("MsgUnstake"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("sender"), Number: int32p(1), Label: &label, Type: &typeString, JsonName: strp("sender")},
+				{Name: strp("pool_id"), Number: int32p(2), Label: &label, Type: &typeUint64, JsonName: strp("poolId")},
+				{Name: strp("amount"), Number: int32p(3), Label: &label, Type: &typeBytes, JsonName: strp("amount")},
 			}},
-			{Name: sp("MsgUnstakeResponse"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("claimed_reward"), Number: ip(1), Label: &label, Type: &typeBytes, JsonName: sp("claimedReward")},
+			{Name: strp("MsgUnstakeResponse"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("claimed_reward"), Number: int32p(1), Label: &label, Type: &typeBytes, JsonName: strp("claimedReward")},
 			}},
-			{Name: sp("MsgClaimReward"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("sender"), Number: ip(1), Label: &label, Type: &typeString, JsonName: sp("sender")},
-				{Name: sp("pool_id"), Number: ip(2), Label: &label, Type: &typeUint64, JsonName: sp("poolId")},
+			{Name: strp("MsgClaimReward"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("sender"), Number: int32p(1), Label: &label, Type: &typeString, JsonName: strp("sender")},
+				{Name: strp("pool_id"), Number: int32p(2), Label: &label, Type: &typeUint64, JsonName: strp("poolId")},
 			}},
-			{Name: sp("MsgClaimRewardResponse"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("amount"), Number: ip(1), Label: &label, Type: &typeBytes, JsonName: sp("amount")},
+			{Name: strp("MsgClaimRewardResponse"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("amount"), Number: int32p(1), Label: &label, Type: &typeBytes, JsonName: strp("amount")},
 			}},
-			{Name: sp("MsgCreateFarm"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("authority"), Number: ip(1), Label: &label, Type: &typeString, JsonName: sp("authority")},
-				{Name: sp("pool_id"), Number: ip(2), Label: &label, Type: &typeUint64, JsonName: sp("poolId")},
-				{Name: sp("reward_per_block"), Number: ip(3), Label: &label, Type: &typeBytes, JsonName: sp("rewardPerBlock")},
-				{Name: sp("start_block"), Number: ip(4), Label: &label, Type: &typeInt64, JsonName: sp("startBlock")},
-				{Name: sp("end_block"), Number: ip(5), Label: &label, Type: &typeInt64, JsonName: sp("endBlock")},
+			{Name: strp("MsgCreateFarm"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("authority"), Number: int32p(1), Label: &label, Type: &typeString, JsonName: strp("authority")},
+				{Name: strp("pool_id"), Number: int32p(2), Label: &label, Type: &typeUint64, JsonName: strp("poolId")},
+				{Name: strp("lp_denom"), Number: int32p(3), Label: &label, Type: &typeString, JsonName: strp("lpDenom")},
+				{Name: strp("reward_per_block"), Number: int32p(4), Label: &label, Type: &typeBytes, JsonName: strp("rewardPerBlock")},
+				{Name: strp("start_block"), Number: int32p(5), Label: &label, Type: &typeInt64, JsonName: strp("startBlock")},
+				{Name: strp("end_block"), Number: int32p(6), Label: &label, Type: &typeInt64, JsonName: strp("endBlock")},
 			}},
-			{Name: sp("MsgCreateFarmResponse")},
-			{Name: sp("MsgUpdateFarm"), Field: []*descriptorpb.FieldDescriptorProto{
-				{Name: sp("authority"), Number: ip(1), Label: &label, Type: &typeString, JsonName: sp("authority")},
-				{Name: sp("pool_id"), Number: ip(2), Label: &label, Type: &typeUint64, JsonName: sp("poolId")},
-				{Name: sp("reward_per_block"), Number: ip(3), Label: &label, Type: &typeBytes, JsonName: sp("rewardPerBlock")},
-				{Name: sp("active"), Number: ip(4), Label: &label, Type: &typeBool, JsonName: sp("active")},
+			{Name: strp("MsgCreateFarmResponse")},
+			{Name: strp("MsgUpdateFarm"), Field: []*descriptorpb.FieldDescriptorProto{
+				{Name: strp("authority"), Number: int32p(1), Label: &label, Type: &typeString, JsonName: strp("authority")},
+				{Name: strp("pool_id"), Number: int32p(2), Label: &label, Type: &typeUint64, JsonName: strp("poolId")},
+				{Name: strp("reward_per_block"), Number: int32p(3), Label: &label, Type: &typeBytes, JsonName: strp("rewardPerBlock")},
+				{Name: strp("active"), Number: int32p(4), Label: &label, Type: &typeBool, JsonName: strp("active")},
 			}},
-			{Name: sp("MsgUpdateFarmResponse")},
+			{Name: strp("MsgUpdateFarmResponse")},
 		},
 		Service: []*descriptorpb.ServiceDescriptorProto{
 			{
-				Name: sp("Msg"),
+				Name: strp("Msg"),
 				Method: []*descriptorpb.MethodDescriptorProto{
-					{Name: sp("Stake"), InputType: sp(".syreen.farming.MsgStake"), OutputType: sp(".syreen.farming.MsgStakeResponse")},
-					{Name: sp("Unstake"), InputType: sp(".syreen.farming.MsgUnstake"), OutputType: sp(".syreen.farming.MsgUnstakeResponse")},
-					{Name: sp("ClaimReward"), InputType: sp(".syreen.farming.MsgClaimReward"), OutputType: sp(".syreen.farming.MsgClaimRewardResponse")},
-					{Name: sp("CreateFarm"), InputType: sp(".syreen.farming.MsgCreateFarm"), OutputType: sp(".syreen.farming.MsgCreateFarmResponse")},
-					{Name: sp("UpdateFarm"), InputType: sp(".syreen.farming.MsgUpdateFarm"), OutputType: sp(".syreen.farming.MsgUpdateFarmResponse")},
+					{Name: strp("Stake"), InputType: strp(".syreen.farming.MsgStake"), OutputType: strp(".syreen.farming.MsgStakeResponse")},
+					{Name: strp("Unstake"), InputType: strp(".syreen.farming.MsgUnstake"), OutputType: strp(".syreen.farming.MsgUnstakeResponse")},
+					{Name: strp("ClaimReward"), InputType: strp(".syreen.farming.MsgClaimReward"), OutputType: strp(".syreen.farming.MsgClaimRewardResponse")},
+					{Name: strp("CreateFarm"), InputType: strp(".syreen.farming.MsgCreateFarm"), OutputType: strp(".syreen.farming.MsgCreateFarmResponse")},
+					{Name: strp("UpdateFarm"), InputType: strp(".syreen.farming.MsgUpdateFarm"), OutputType: strp(".syreen.farming.MsgUpdateFarmResponse")},
 				},
 			},
 		},
@@ -85,7 +88,7 @@ func registerFarmingProtoFileDescriptors() {
 		panic(err)
 	}
 	var buf bytes.Buffer
-	w := gzip.NewWriter(&buf)
+	w, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 	_, _ = w.Write(rawBz)
 	_ = w.Close()
 	fileDescriptorFarmingTx = buf.Bytes()
@@ -99,5 +102,5 @@ func registerFarmingProtoFileDescriptors() {
 	}
 }
 
-func sp(s string) *string { return &s }
-func ip(n int32) *int32   { return &n }
+func strp(s string) *string  { return &s }
+func int32p(i int32) *int32 { return &i }

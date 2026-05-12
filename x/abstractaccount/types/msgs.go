@@ -22,10 +22,10 @@ const (
 // --- MsgCreateSmartAccount ---
 
 type MsgCreateSmartAccount struct {
-	Sender      string      `json:"sender"`
-	AccountType AccountType `json:"account_type"`
-	Owners      []string    `json:"owners"`
-	Threshold   uint32      `json:"threshold"`
+	Sender      string      `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	AccountType AccountType `protobuf:"bytes,2,opt,name=account_type,json=accountType,proto3,casttype=AccountType" json:"account_type"`
+	Owners      []string    `protobuf:"bytes,3,rep,name=owners,proto3" json:"owners"`
+	Threshold   uint32      `protobuf:"varint,4,opt,name=threshold,proto3" json:"threshold"`
 }
 
 func (m *MsgCreateSmartAccount) ProtoMessage()           {}
@@ -58,10 +58,10 @@ func (m *MsgCreateSmartAccount) ValidateBasic() error {
 // --- MsgCreateSessionKey ---
 
 type MsgCreateSessionKey struct {
-	Granter     string       `json:"granter"`
-	Grantee     string       `json:"grantee"`
-	Permissions []Permission `json:"permissions"`
-	Duration    time.Duration `json:"duration"`
+	Granter     string       `protobuf:"bytes,1,opt,name=granter,proto3" json:"granter"`
+	Grantee     string       `protobuf:"bytes,2,opt,name=grantee,proto3" json:"grantee"`
+	Permissions []Permission `protobuf:"bytes,3,rep,name=permissions,proto3" json:"permissions"`
+	Duration    time.Duration `protobuf:"varint,4,opt,name=duration,proto3,casttype=time.Duration" json:"duration"`
 }
 
 func (m *MsgCreateSessionKey) ProtoMessage()           {}
@@ -88,8 +88,8 @@ func (m *MsgCreateSessionKey) ValidateBasic() error {
 // --- MsgRevokeSessionKey ---
 
 type MsgRevokeSessionKey struct {
-	Granter        string `json:"granter"`
-	SessionKeyAddr string `json:"session_key_addr"`
+	Granter        string `protobuf:"bytes,1,opt,name=granter,proto3" json:"granter"`
+	SessionKeyAddr string `protobuf:"bytes,2,opt,name=session_key_addr,json=sessionKeyAddr,proto3" json:"session_key_addr"`
 }
 
 func (m *MsgRevokeSessionKey) ProtoMessage()           {}
@@ -110,9 +110,9 @@ func (m *MsgRevokeSessionKey) ValidateBasic() error {
 // --- MsgInitiateRecovery ---
 
 type MsgInitiateRecovery struct {
-	Guardian  string   `json:"guardian"`
-	Account   string   `json:"account"`
-	NewOwners []string `json:"new_owners"`
+	Guardian  string   `protobuf:"bytes,1,opt,name=guardian,proto3" json:"guardian"`
+	Account   string   `protobuf:"bytes,2,opt,name=account,proto3" json:"account"`
+	NewOwners []string `protobuf:"bytes,3,rep,name=new_owners,json=newOwners,proto3" json:"new_owners"`
 }
 
 func (m *MsgInitiateRecovery) ProtoMessage()           {}
@@ -141,8 +141,8 @@ func (m *MsgInitiateRecovery) ValidateBasic() error {
 // --- MsgApproveRecovery ---
 
 type MsgApproveRecovery struct {
-	Guardian string `json:"guardian"`
-	Account  string `json:"account"`
+	Guardian string `protobuf:"bytes,1,opt,name=guardian,proto3" json:"guardian"`
+	Account  string `protobuf:"bytes,2,opt,name=account,proto3" json:"account"`
 }
 
 func (m *MsgApproveRecovery) ProtoMessage()           {}
@@ -163,8 +163,8 @@ func (m *MsgApproveRecovery) ValidateBasic() error {
 // --- MsgExecuteRecovery ---
 
 type MsgExecuteRecovery struct {
-	Sender  string `json:"sender"`  // Must be one of the approving guardians
-	Account string `json:"account"` // The smart account being recovered
+	Sender  string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`  // Must be one of the approving guardians
+	Account string `protobuf:"bytes,2,opt,name=account,proto3" json:"account"` // The smart account being recovered
 }
 
 func (m *MsgExecuteRecovery) ProtoMessage()           {}
@@ -185,10 +185,10 @@ func (m *MsgExecuteRecovery) ValidateBasic() error {
 // --- MsgSponsorGas ---
 
 type MsgSponsorGas struct {
-	Sponsor   string        `json:"sponsor"`
-	Sponsored string        `json:"sponsored"`
-	GasLimit  uint64        `json:"gas_limit"`
-	Duration  time.Duration `json:"duration"`
+	Sponsor   string        `protobuf:"bytes,1,opt,name=sponsor,proto3" json:"sponsor"`
+	Sponsored string        `protobuf:"bytes,2,opt,name=sponsored,proto3" json:"sponsored"`
+	GasLimit  uint64        `protobuf:"varint,3,opt,name=gas_limit,json=gasLimit,proto3" json:"gas_limit"`
+	Duration  time.Duration `protobuf:"varint,4,opt,name=duration,proto3,casttype=time.Duration" json:"duration"`
 }
 
 func (m *MsgSponsorGas) ProtoMessage()           {}
@@ -215,8 +215,8 @@ func (m *MsgSponsorGas) ValidateBasic() error {
 // --- MsgBatchExecute ---
 
 type MsgBatchExecute struct {
-	Sender   string             `json:"sender"`
-	Messages []json.RawMessage  `json:"messages"`
+	Sender   string             `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	Messages []json.RawMessage  `protobuf:"bytes,2,rep,name=messages,proto3" json:"messages"`
 }
 
 func (m *MsgBatchExecute) ProtoMessage()           {}
