@@ -12,7 +12,7 @@ import (
 // ---------------------------------------------------------------------------
 
 type MsgStoreCodeResponse struct {
-	CodeID uint64 `json:"code_id"`
+	CodeID uint64 `protobuf:"varint,1,opt,name=code_id,json=codeId,proto3" json:"code_id"`
 }
 
 func (m *MsgStoreCodeResponse) ProtoMessage()           {}
@@ -23,7 +23,7 @@ func (m *MsgStoreCodeResponse) XXX_MessageName() string {
 }
 
 type MsgInstantiateContractResponse struct {
-	Address string `json:"address"`
+	Address string `protobuf:"bytes,1,opt,name=address,proto3" json:"address"`
 }
 
 func (m *MsgInstantiateContractResponse) ProtoMessage()  {}
@@ -34,7 +34,7 @@ func (m *MsgInstantiateContractResponse) XXX_MessageName() string {
 }
 
 type MsgExecuteContractResponse struct {
-	Data []byte `json:"data,omitempty"`
+	Data []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
 }
 
 func (m *MsgExecuteContractResponse) ProtoMessage()           {}
@@ -45,7 +45,7 @@ func (m *MsgExecuteContractResponse) XXX_MessageName() string {
 }
 
 type MsgMigrateContractResponse struct {
-	Data []byte `json:"data,omitempty"`
+	Data []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
 }
 
 func (m *MsgMigrateContractResponse) ProtoMessage()           {}

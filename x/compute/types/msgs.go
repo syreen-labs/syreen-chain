@@ -17,9 +17,9 @@ const (
 
 // MsgStoreCode uploads Wasm bytecode to the chain
 type MsgStoreCode struct {
-	Sender                string       `json:"sender"`
-	WASMByteCode          []byte       `json:"wasm_byte_code"`
-	InstantiatePermission *AccessConfig `json:"instantiate_permission,omitempty"`
+	Sender                string       `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	WASMByteCode          []byte       `protobuf:"bytes,2,opt,name=wasm_byte_code,json=wasmByteCode,proto3" json:"wasm_byte_code"`
+	InstantiatePermission *AccessConfig `protobuf:"bytes,3,opt,name=instantiate_permission,json=instantiatePermission,proto3" json:"instantiate_permission,omitempty"`
 }
 
 func (m *MsgStoreCode) ProtoMessage()           {}
@@ -43,18 +43,18 @@ func (m *MsgStoreCode) ValidateBasic() error {
 
 // MsgInstantiateContract creates a new smart contract instance
 type MsgInstantiateContract struct {
-	Sender string          `json:"sender"`
-	Admin  string          `json:"admin,omitempty"`
-	CodeID uint64          `json:"code_id"`
-	Label  string          `json:"label"`
-	Msg    json.RawMessage `json:"msg"`
-	Funds  sdk.Coins       `json:"funds,omitempty"`
+	Sender string          `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	Admin  string          `protobuf:"bytes,2,opt,name=admin,proto3" json:"admin,omitempty"`
+	CodeID uint64          `protobuf:"varint,3,opt,name=code_id,json=codeId,proto3" json:"code_id"`
+	Label  string          `protobuf:"bytes,4,opt,name=label,proto3" json:"label"`
+	Msg    json.RawMessage `protobuf:"bytes,5,opt,name=msg,proto3,casttype=encoding/json.RawMessage" json:"msg"`
+	Funds  sdk.Coins       `protobuf:"bytes,6,rep,name=funds,proto3,castrepeated=github.com/cosmos/cosmos-sdk/types.Coins" json:"funds,omitempty"`
 }
 
 func (m *MsgInstantiateContract) ProtoMessage()           {}
 func (m *MsgInstantiateContract) Reset()                  { *m = MsgInstantiateContract{} }
 func (m *MsgInstantiateContract) String() string          { return fmt.Sprintf("instantiate code %d from %s", m.CodeID, m.Sender) }
-func (m *MsgInstantiateContract) XXX_MessageName() string { return "syreen.compute.MsgInstantiate" }
+func (m *MsgInstantiateContract) XXX_MessageName() string { return "syreen.compute.MsgInstantiateContract" }
 
 func (m *MsgInstantiateContract) ValidateBasic() error {
 	_, err := sdk.AccAddressFromBech32(m.Sender)
@@ -87,16 +87,16 @@ func (m *MsgInstantiateContract) ValidateBasic() error {
 
 // MsgExecuteContract calls a smart contract
 type MsgExecuteContract struct {
-	Sender   string          `json:"sender"`
-	Contract string          `json:"contract"`
-	Msg      json.RawMessage `json:"msg"`
-	Funds    sdk.Coins       `json:"funds,omitempty"`
+	Sender   string          `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	Contract string          `protobuf:"bytes,2,opt,name=contract,proto3" json:"contract"`
+	Msg      json.RawMessage `protobuf:"bytes,3,opt,name=msg,proto3,casttype=encoding/json.RawMessage" json:"msg"`
+	Funds    sdk.Coins       `protobuf:"bytes,4,rep,name=funds,proto3,castrepeated=github.com/cosmos/cosmos-sdk/types.Coins" json:"funds,omitempty"`
 }
 
 func (m *MsgExecuteContract) ProtoMessage()           {}
 func (m *MsgExecuteContract) Reset()                  { *m = MsgExecuteContract{} }
 func (m *MsgExecuteContract) String() string          { return fmt.Sprintf("execute %s from %s", m.Contract, m.Sender) }
-func (m *MsgExecuteContract) XXX_MessageName() string { return "syreen.compute.MsgExecute" }
+func (m *MsgExecuteContract) XXX_MessageName() string { return "syreen.compute.MsgExecuteContract" }
 
 func (m *MsgExecuteContract) ValidateBasic() error {
 	_, err := sdk.AccAddressFromBech32(m.Sender)
@@ -118,16 +118,16 @@ func (m *MsgExecuteContract) ValidateBasic() error {
 
 // MsgMigrateContract runs a code upgrade for a smart contract
 type MsgMigrateContract struct {
-	Sender   string          `json:"sender"`
-	Contract string          `json:"contract"`
-	CodeID   uint64          `json:"code_id"`
-	Msg      json.RawMessage `json:"msg"`
+	Sender   string          `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	Contract string          `protobuf:"bytes,2,opt,name=contract,proto3" json:"contract"`
+	CodeID   uint64          `protobuf:"varint,3,opt,name=code_id,json=codeId,proto3" json:"code_id"`
+	Msg      json.RawMessage `protobuf:"bytes,4,opt,name=msg,proto3,casttype=encoding/json.RawMessage" json:"msg"`
 }
 
 func (m *MsgMigrateContract) ProtoMessage()           {}
 func (m *MsgMigrateContract) Reset()                  { *m = MsgMigrateContract{} }
 func (m *MsgMigrateContract) String() string          { return fmt.Sprintf("migrate %s to code %d", m.Contract, m.CodeID) }
-func (m *MsgMigrateContract) XXX_MessageName() string { return "syreen.compute.MsgMigrate" }
+func (m *MsgMigrateContract) XXX_MessageName() string { return "syreen.compute.MsgMigrateContract" }
 
 func (m *MsgMigrateContract) ValidateBasic() error {
 	_, err := sdk.AccAddressFromBech32(m.Sender)
@@ -149,9 +149,9 @@ func (m *MsgMigrateContract) ValidateBasic() error {
 
 // MsgUpdateAdmin sets a new admin for a contract
 type MsgUpdateAdmin struct {
-	Sender   string `json:"sender"`
-	NewAdmin string `json:"new_admin"`
-	Contract string `json:"contract"`
+	Sender   string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender"`
+	NewAdmin string `protobuf:"bytes,2,opt,name=new_admin,json=newAdmin,proto3" json:"new_admin"`
+	Contract string `protobuf:"bytes,3,opt,name=contract,proto3" json:"contract"`
 }
 
 func (m *MsgUpdateAdmin) ProtoMessage()           {}

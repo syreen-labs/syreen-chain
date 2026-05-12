@@ -329,9 +329,9 @@ func MakeEncodingConfig() EncodingConfig {
 		{"syreen.abstractaccount.MsgBatchExecute", "sender"},
 		// compute
 		{"syreen.compute.MsgStoreCode", "sender"},
-		{"syreen.compute.MsgInstantiate", "sender"},
-		{"syreen.compute.MsgExecute", "sender"},
-		{"syreen.compute.MsgMigrate", "sender"},
+		{"syreen.compute.MsgInstantiateContract", "sender"},
+		{"syreen.compute.MsgExecuteContract", "sender"},
+		{"syreen.compute.MsgMigrateContract", "sender"},
 		{"syreen.compute.MsgUpdateAdmin", "sender"},
 		// identity
 		{"syreen.identity.MsgRegisterIdentity", "address"},
