@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"time"
+
+	"cosmossdk.io/math"
 	"fmt"
 	"io"
 	"os"
@@ -1030,11 +1033,81 @@ func NewSyreenApp(
 		app.UpgradeKeeper.SetUpgradeHandler("v1.1.0", func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			sdkCtx := sdk.UnwrapSDKContext(ctx)
 			sdkCtx.Logger().Info("running v1.1.0 upgrade handler", "height", sdkCtx.BlockHeight())
-			// Supply fix (410M->400M) applied in genesis. No burn needed.
-			// Voting period (10min) also set in genesis. No param change needed.
 			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
 		})
 	}
+
+	// v2.0.0: Founder vesting schedule (6-month cliff + 24-month linear vest)
+	app.UpgradeKeeper.SetUpgradeHandler("v2.0.0",
+		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			logger.Info("applying v2.0.0 upgrade: founder vesting schedule")
+
+			founderAddr, err := sdk.AccAddressFromBech32("syreen1rrj8dx99djxkjx4rlfy2xryca9g7fujjjfclvz")
+			if err != nil {
+				return nil, err
+			}
+
+			acct := app.AccountKeeper.GetAccount(sdkCtx, founderAddr)
+			if acct == nil {
+				logger.Info("founder account not found, skipping")
+				return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+			}
+
+			baseAcct, ok := acct.(*authtypes.BaseAccount)
+			if !ok {
+				logger.Info("founder account not a BaseAccount, skipping")
+				return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+			}
+
+			now := sdkCtx.BlockTime()
+			cliffEnd := now.Add(6 * 30 * 24 * time.Hour) // ~6 months
+			founderBalance := app.BankKeeper.GetBalance(sdkCtx, founderAddr, "usyreen")
+			totalVesting := founderBalance.Amount
+
+			monthlyAmount := totalVesting.Quo(math.NewInt(24))
+			remainder := totalVesting.Sub(monthlyAmount.Mul(math.NewInt(24)))
+
+			cliffSeconds := int64(cliffEnd.Sub(now).Seconds())
+			monthSeconds := int64(30 * 24 * 3600)
+
+			periods := make([]vestingtypes.Period, 0, 24)
+			for i := 0; i < 24; i++ {
+				amt := monthlyAmount
+				if i == 23 {
+					amt = amt.Add(remainder)
+				}
+				length := monthSeconds
+				if i == 0 {
+					length = cliffSeconds + monthSeconds
+				}
+				periods = append(periods, vestingtypes.Period{
+					Length: length,
+					Amount: sdk.NewCoins(sdk.NewCoin("usyreen", amt)),
+				})
+			}
+
+			vestingAcct, err := vestingtypes.NewPeriodicVestingAccount(
+				baseAcct,
+				sdk.NewCoins(sdk.NewCoin("usyreen", totalVesting)),
+				now.Unix(),
+				periods,
+			)
+			if err != nil {
+				return nil, err
+			}
+			app.AccountKeeper.SetAccount(sdkCtx, vestingAcct)
+
+			logger.Info("founder vesting account created",
+				"address", founderAddr.String(),
+				"total_vesting", totalVesting.String(),
+				"cliff_end", cliffEnd.String(),
+				"fully_vested", cliffEnd.Add(24*30*24*time.Hour).String(),
+			)
+
+			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
 
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
