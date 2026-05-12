@@ -1,0 +1,40 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build static binary
+        run: |
+          CGO_ENABLED=1 go build -buildvcs=false -tags "netgo" \
+            -ldflags '-linkmode external -extldflags "-static" -X github.com/cosmos/cosmos-sdk/version.Version=${{ github.ref_name }}' \
+            -trimpath -o syreend ./cmd/syreend
+          sha256sum syreend > syreend.sha256
+          echo "Built syreend ${{ github.ref_name }}"
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            syreend
+            syreend.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

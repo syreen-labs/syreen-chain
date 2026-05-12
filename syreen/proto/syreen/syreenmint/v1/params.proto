@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package syreen.syreenmint.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "syreen/x/syreenmint/types;types";
+
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.equal_all) = true;
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+
+message Params {
+  string target_bonded_ratio = 1;
+  string issuance_rate = 2;
+  string issuance_min = 3;
+  string issuance_max = 4;
+  string tail_issuance_rate = 5;
+  string adjustment_rate = 6;
+  string max_rate_change_per_epoch = 7;
+
+  int64 blocks_per_year = 8;
+  int64 epoch_blocks = 9;
+  int64 activation_delay_blocks = 10;
+
+  string soft_cap = 11;
+  string hard_cap = 12;
+}

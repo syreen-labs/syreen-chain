@@ -1,0 +1,709 @@
+{
+  "app_name": "\u003cappd\u003e",
+  "app_version": "",
+  "genesis_time": "2026-04-29T03:58:59.27449152Z",
+  "chain_id": "syreen-1",
+  "initial_height": 1,
+  "app_hash": null,
+  "app_state": {
+    "07-tendermint": null,
+    "abstractaccount": {
+      "params": {
+        "max_session_key_duration": 86400000000000,
+        "max_guardians": 7,
+        "recovery_delay_period": 172800000000000,
+        "max_batch_size": 10,
+        "enable_gas_sponsorship": true
+      }
+    },
+    "aiagent": {
+      "agents": [],
+      "next_id": 1
+    },
+    "auth": {
+      "params": {
+        "max_memo_characters": "256",
+        "tx_sig_limit": "7",
+        "tx_size_cost_per_byte": "10",
+        "sig_verify_cost_ed25519": "590",
+        "sig_verify_cost_secp256k1": "1000"
+      },
+      "accounts": [
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen19jdmllcluycqn47zrk6qhunz82m5737tk03lkf",
+          "pub_key": null,
+          "account_number": "0",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen1fe8zys9eyylerc2wxz9rz8d6a7wfsle2wc9tsr",
+          "pub_key": null,
+          "account_number": "1",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen1vmkkthlxtp0a22k38ckw5jkxgsx94pflmmtpnq",
+          "pub_key": null,
+          "account_number": "2",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen102m3n0a6pnrkgmc9yyzyel77gayzz5d2r38w2v",
+          "pub_key": null,
+          "account_number": "3",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen1c75k3nf7za2qkaxc7p350v6w635yk8a77ad07c",
+          "pub_key": null,
+          "account_number": "4",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen1asv2wch23n9yqqt4wrf5lhg3slj6g66js3ccf6",
+          "pub_key": null,
+          "account_number": "5",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen1a7eqdqdptjh63vwems98w0mzks8cl6fczzwnvn",
+          "pub_key": null,
+          "account_number": "6",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen17fmxj5r0xfsh95cxemjrrveg57e9gj2v8ywf0r",
+          "pub_key": null,
+          "account_number": "7",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "syreen1dalwufy8tljqkdajx3fa0dpk2ysl2r0sstgswt",
+          "pub_key": null,
+          "account_number": "8",
+          "sequence": "0"
+        }
+      ]
+    },
+    "authz": {
+      "authorization": []
+    },
+    "bank": {
+      "params": {
+        "send_enabled": [],
+        "default_send_enabled": true
+      },
+      "balances": [
+        {
+          "address": "syreen19jdmllcluycqn47zrk6qhunz82m5737tk03lkf",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "100000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen1fe8zys9eyylerc2wxz9rz8d6a7wfsle2wc9tsr",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "40000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen1vmkkthlxtp0a22k38ckw5jkxgsx94pflmmtpnq",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "40000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen1dalwufy8tljqkdajx3fa0dpk2ysl2r0sstgswt",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "10000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen102m3n0a6pnrkgmc9yyzyel77gayzz5d2r38w2v",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "40000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen1c75k3nf7za2qkaxc7p350v6w635yk8a77ad07c",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "40000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen1asv2wch23n9yqqt4wrf5lhg3slj6g66js3ccf6",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "40000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen1a7eqdqdptjh63vwems98w0mzks8cl6fczzwnvn",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "20000000000000"
+            }
+          ]
+        },
+        {
+          "address": "syreen17fmxj5r0xfsh95cxemjrrveg57e9gj2v8ywf0r",
+          "coins": [
+            {
+              "denom": "usyreen",
+              "amount": "80000000000000"
+            }
+          ]
+        }
+      ],
+      "supply": [],
+      "denom_metadata": [],
+      "send_enabled": []
+    },
+    "clmm": {
+      "pools": [],
+      "positions": []
+    },
+    "compute": {
+      "params": {
+        "code_upload_access": {
+          "permission": "Everybody"
+        },
+        "instantiate_default_permission": "Everybody",
+        "max_wasm_code_size": 819200,
+        "max_contract_gas": 10000000000
+      },
+      "codes": [],
+      "contracts": []
+    },
+    "crisis": {
+      "constant_fee": {
+        "denom": "usyreen",
+        "amount": "1000"
+      }
+    },
+    "dex": {
+      "params": {
+        "default_swap_fee": "0.003000000000000000",
+        "protocol_fee_share": "0.333000000000000000",
+        "min_initial_liquidity": "1000000",
+        "pool_creation_fee": []
+      },
+      "pools": [],
+      "next_pool_id": 1
+    },
+    "distribution": {
+      "params": {
+        "community_tax": "0.020000000000000000",
+        "base_proposer_reward": "0.000000000000000000",
+        "bonus_proposer_reward": "0.000000000000000000",
+        "withdraw_addr_enabled": true
+      },
+      "fee_pool": {
+        "community_pool": []
+      },
+      "delegator_withdraw_infos": [],
+      "previous_proposer": "",
+      "outstanding_rewards": [],
+      "validator_accumulated_commissions": [],
+      "validator_historical_rewards": [],
+      "validator_current_rewards": [],
+      "delegator_starting_infos": [],
+      "validator_slash_events": []
+    },
+    "evidence": {
+      "evidence": []
+    },
+    "evm": {
+      "params": {
+        "evm_denom": "usyreen",
+        "enable_create": true,
+        "enable_call": true
+      },
+      "accounts": []
+    },
+    "farming": {
+      "farms": [],
+      "positions": [],
+      "params": {
+        "default_reward_denom": "usyreen",
+        "max_reward_per_block": "100000000",
+        "ecosystem_address": ""
+      }
+    },
+    "feegrant": {
+      "allowances": []
+    },
+    "feemarket": {
+      "params": {
+        "default_base_fee": "0.010000000000000000",
+        "min_base_fee": "0.000100000000000000",
+        "max_base_fee": "1000.000000000000000000",
+        "base_fee_change_denominator": 8,
+        "elasticity_multiplier": 2,
+        "burn_ratio": "0.800000000000000000",
+        "enable_fee_burn": true,
+        "fee_lanes": [
+          {
+            "name": "default",
+            "base_fee_multiplier": "1.000000000000000000",
+            "max_block_gas": 50000000,
+            "current_utilization": "0.000000000000000000"
+          },
+          {
+            "name": "defi",
+            "base_fee_multiplier": "1.500000000000000000",
+            "max_block_gas": 30000000,
+            "current_utilization": "0.000000000000000000"
+          },
+          {
+            "name": "ibc",
+            "base_fee_multiplier": "1.200000000000000000",
+            "max_block_gas": 20000000,
+            "current_utilization": "0.000000000000000000"
+          },
+          {
+            "name": "governance",
+            "base_fee_multiplier": "0.800000000000000000",
+            "max_block_gas": 10000000,
+            "current_utilization": "0.000000000000000000"
+          }
+        ]
+      },
+      "fee_state": {
+        "base_fee": "0.010000000000000000",
+        "min_base_fee": "0.000100000000000000",
+        "max_base_fee": "1000.000000000000000000",
+        "block_gas_target": 50000000,
+        "adjustment_speed": "0.125000000000000000"
+      }
+    },
+    "flashloan": {
+      "pools": [],
+      "records": [],
+      "deposits": [],
+      "stats": {
+        "total_executed": 0,
+        "total_volume": "0",
+        "total_fees_earned": "0"
+      },
+      "next_record_id": 0
+    },
+    "genutil": {
+      "gen_txs": [
+        {
+          "body": {
+            "messages": [
+              {
+                "@type": "/cosmos.staking.v1beta1.MsgCreateValidator",
+                "description": {
+                  "moniker": "syreen-genesis-validator",
+                  "identity": "",
+                  "website": "https://syreen.com",
+                  "security_contact": "",
+                  "details": "Syreen Genesis Validator"
+                },
+                "commission": {
+                  "rate": "0.100000000000000000",
+                  "max_rate": "0.200000000000000000",
+                  "max_change_rate": "0.010000000000000000"
+                },
+                "min_self_delegation": "1000000",
+                "delegator_address": "",
+                "validator_address": "syreenvaloper1c75k3nf7za2qkaxc7p350v6w635yk8a7nm2k02",
+                "pubkey": {
+                  "@type": "/cosmos.crypto.ed25519.PubKey",
+                  "key": "ossorZNM8A8CJbdsqCl7vbbpTuApvCVVusdTLjEoQvs="
+                },
+                "value": {
+                  "denom": "usyreen",
+                  "amount": "10000000000000"
+                }
+              }
+            ],
+            "memo": "0ef859989ed543259a5ab1fd6dd7cadb0121bb07@178.156.213.251:26656",
+            "timeout_height": "0",
+            "extension_options": [],
+            "non_critical_extension_options": []
+          },
+          "auth_info": {
+            "signer_infos": [
+              {
+                "public_key": {
+                  "@type": "/cosmos.crypto.secp256k1.PubKey",
+                  "key": "AnU/2HGMYqDnNrLX/2vaMjXc9ARo8efHS+wySAn041lk"
+                },
+                "mode_info": {
+                  "single": {
+                    "mode": "SIGN_MODE_DIRECT"
+                  }
+                },
+                "sequence": "0"
+              }
+            ],
+            "fee": {
+              "amount": [],
+              "gas_limit": "200000",
+              "payer": "",
+              "granter": ""
+            },
+            "tip": null
+          },
+          "signatures": [
+            "M7otgMzFmf/+akJyCbw2EfCw7t83nmNqN+/FX486k7YLB2QchkZyp/aM9N868MNRliejcdcNZ3xebX1alRapgg=="
+          ]
+        },
+        {
+          "body": {
+            "messages": [
+              {
+                "@type": "/cosmos.staking.v1beta1.MsgCreateValidator",
+                "description": {
+                  "moniker": "validator2",
+                  "identity": "",
+                  "website": "",
+                  "security_contact": "",
+                  "details": "Syreen Validator 2"
+                },
+                "commission": {
+                  "rate": "0.100000000000000000",
+                  "max_rate": "0.200000000000000000",
+                  "max_change_rate": "0.010000000000000000"
+                },
+                "min_self_delegation": "1000000",
+                "delegator_address": "",
+                "validator_address": "syreenvaloper1dalwufy8tljqkdajx3fa0dpk2ysl2r0sad0fle",
+                "pubkey": {
+                  "@type": "/cosmos.crypto.ed25519.PubKey",
+                  "key": "x4zt0sX2zgmz/BK+GOh83mlqVX8ZZqmAgI+6GDviaNY="
+                },
+                "value": {
+                  "denom": "usyreen",
+                  "amount": "10000000000000"
+                }
+              }
+            ],
+            "memo": "31f9905e5d94c9addd44b1c0eed180a88a1915e9@178.156.159.200:26656",
+            "timeout_height": "0",
+            "extension_options": [],
+            "non_critical_extension_options": []
+          },
+          "auth_info": {
+            "signer_infos": [
+              {
+                "public_key": {
+                  "@type": "/cosmos.crypto.secp256k1.PubKey",
+                  "key": "A2xv9xbfDS1J0IcWTpfwAs3CUeXI1809t5LiefN8etTT"
+                },
+                "mode_info": {
+                  "single": {
+                    "mode": "SIGN_MODE_DIRECT"
+                  }
+                },
+                "sequence": "0"
+              }
+            ],
+            "fee": {
+              "amount": [],
+              "gas_limit": "200000",
+              "payer": "",
+              "granter": ""
+            },
+            "tip": null
+          },
+          "signatures": [
+            "vwFng34Nt3gEYGljc5+ih0TIhmTAV8l8NoBWtworOhY2bBQsXq6Mi0uxALnsI2O9DK88q7ugYg2gPByrBGnbMw=="
+          ]
+        }
+      ]
+    },
+    "gov": {
+      "starting_proposal_id": "1",
+      "deposits": [],
+      "votes": [],
+      "proposals": [],
+      "deposit_params": null,
+      "voting_params": null,
+      "tally_params": null,
+      "params": {
+        "min_deposit": [
+          {
+            "denom": "usyreen",
+            "amount": "100000000"
+          }
+        ],
+        "max_deposit_period": "432000s",
+        "voting_period": "432000s",
+        "quorum": "0.334000000000000000",
+        "threshold": "0.500000000000000000",
+        "veto_threshold": "0.334000000000000000",
+        "min_initial_deposit_ratio": "0.000000000000000000",
+        "proposal_cancel_ratio": "0.500000000000000000",
+        "proposal_cancel_dest": "",
+        "expedited_voting_period": "172800s",
+        "expedited_threshold": "0.667000000000000000",
+        "expedited_min_deposit": [
+          {
+            "denom": "usyreen",
+            "amount": "500000000"
+          }
+        ],
+        "burn_vote_quorum": false,
+        "burn_proposal_deposit_prevote": false,
+        "burn_vote_veto": true,
+        "min_deposit_ratio": "0.010000000000000000"
+      },
+      "constitution": ""
+    },
+    "ibc": {
+      "client_genesis": {
+        "clients": [],
+        "clients_consensus": [],
+        "clients_metadata": [],
+        "params": {
+          "allowed_clients": [
+            "06-solomachine",
+            "07-tendermint",
+            "09-localhost"
+          ]
+        },
+        "create_localhost": false,
+        "next_client_sequence": "0"
+      },
+      "connection_genesis": {
+        "connections": [],
+        "client_connection_paths": [],
+        "next_connection_sequence": "0",
+        "params": {
+          "max_expected_time_per_block": "30000000000"
+        }
+      },
+      "channel_genesis": {
+        "channels": [],
+        "acknowledgements": [],
+        "commitments": [],
+        "receipts": [],
+        "send_sequences": [],
+        "recv_sequences": [],
+        "ack_sequences": [],
+        "next_channel_sequence": "0"
+      }
+    },
+    "identity": {
+      "params": {
+        "verification_expiry_blocks": 63115200,
+        "min_trust_score": 0,
+        "enable_identity": true,
+        "basic_verification_free": true
+      },
+      "identities": [],
+      "verifiers": []
+    },
+    "intent": {
+      "params": {
+        "min_solver_stake": {
+          "denom": "usyreen",
+          "amount": "1000000000"
+        },
+        "solving_window": 10,
+        "max_solutions_per_intent": 20,
+        "solver_slash_fraction": "0.100000000000000000",
+        "intent_expiry_blocks": 20000,
+        "solver_unbonding_blocks": 100,
+        "enable_intents": true,
+        "allowed_msg_types": [
+          "/cosmos.bank.v1beta1.MsgSend",
+          "/cosmos.bank.v1beta1.MsgMultiSend",
+          "/ibc.applications.transfer.v1.MsgTransfer",
+          "/syreen.tokenfactory.MsgMint",
+          "/syreen.tokenfactory.MsgBurn",
+          "/syreen.compute.MsgExecuteContract"
+        ],
+        "max_chain_steps": 10,
+        "enable_chains": true
+      },
+      "intents": [],
+      "solvers": []
+    },
+    "launchpad": {
+      "launches": [],
+      "contributions": [],
+      "vestings": []
+    },
+    "lending": {
+      "pools": [],
+      "deposits": [],
+      "borrows": [],
+      "next_pool_id": 0,
+      "next_borrow_id": 0
+    },
+    "mevprotection": {
+      "params": {
+        "fair_order_config": {
+          "enable_commit_reveal": true,
+          "commit_window": 1,
+          "reveal_window": 1,
+          "max_tx_delay": 3
+        },
+        "slash_fraction": "0.050000000000000000"
+      },
+      "penalties": []
+    },
+    "mint": {
+      "minter": {
+        "inflation": "0.100000000000000000",
+        "annual_provisions": "0.000000000000000000"
+      },
+      "params": {
+        "mint_denom": "usyreen",
+        "inflation_rate_change": "0.100000000000000000",
+        "inflation_max": "0.150000000000000000",
+        "inflation_min": "0.050000000000000000",
+        "goal_bonded": "0.670000000000000000",
+        "blocks_per_year": "63115200"
+      }
+    },
+    "options": {
+      "options": [],
+      "next_id": 1
+    },
+    "payments": {
+      "params": {
+        "platform_fee_percent": "2.500000000000000000",
+        "insurance_fee_percent": "0.500000000000000000",
+        "invoice_expiry_blocks": 345600,
+        "enable_payments": true,
+        "platform_address": "",
+        "insurance_pool_address": ""
+      },
+      "invoices": [],
+      "exchange_rates": [],
+      "earnings": [],
+      "invoice_count": 0
+    },
+    "perps": {
+      "markets": [],
+      "positions": [],
+      "fundings": [],
+      "insurance": {
+        "balance": "0"
+      },
+      "next_market_id": 0
+    },
+    "portfolio": {
+      "portfolios": [],
+      "assets": [],
+      "trades": [],
+      "activities": [],
+      "competitions": [],
+      "entries": []
+    },
+    "predict": {
+      "markets": [],
+      "positions": [],
+      "resolutions": []
+    },
+    "slashing": {
+      "params": {
+        "signed_blocks_window": "100",
+        "min_signed_per_window": "0.500000000000000000",
+        "downtime_jail_duration": "600s",
+        "slash_fraction_double_sign": "0.050000000000000000",
+        "slash_fraction_downtime": "0.010000000000000000"
+      },
+      "signing_infos": [],
+      "missed_blocks": []
+    },
+    "staking": {
+      "params": {
+        "unbonding_time": "1814400s",
+        "max_validators": 150,
+        "max_entries": 7,
+        "historical_entries": 10000,
+        "bond_denom": "usyreen",
+        "min_commission_rate": "0.050000000000000000"
+      },
+      "last_total_power": "0",
+      "last_validator_powers": [],
+      "validators": [],
+      "delegations": [],
+      "unbonding_delegations": [],
+      "redelegations": [],
+      "exported": false
+    },
+    "tokenfactory": {
+      "params": {
+        "denom_creation_fee": []
+      },
+      "factory_denoms": []
+    },
+    "transfer": {
+      "port_id": "transfer",
+      "denom_traces": [],
+      "params": {
+        "send_enabled": true,
+        "receive_enabled": true
+      },
+      "total_escrowed": []
+    },
+    "upgrade": {},
+    "vault": {
+      "vaults": [],
+      "deposits": []
+    },
+    "vesting": {}
+  },
+  "consensus": {
+    "params": {
+      "block": {
+        "max_bytes": "22020096",
+        "max_gas": "-1"
+      },
+      "evidence": {
+        "max_age_num_blocks": "100000",
+        "max_age_duration": "172800000000000",
+        "max_bytes": "1048576"
+      },
+      "validator": {
+        "pub_key_types": [
+          "ed25519"
+        ]
+      },
+      "version": {
+        "app": "0"
+      },
+      "abci": {
+        "vote_extensions_enable_height": "0"
+      }
+    }
+  }
+}
