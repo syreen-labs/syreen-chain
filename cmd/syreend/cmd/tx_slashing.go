@@ -6,6 +6,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 )
 
@@ -41,7 +42,7 @@ func NewUnjailCmd() *cobra.Command {
 			valAddr := clientCtx.GetFromAddress()
 
 			msg := &slashingtypes.MsgUnjail{
-				ValidatorAddr: valAddr.String(),
+				ValidatorAddr: sdk.ValAddress(valAddr).String(),
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
