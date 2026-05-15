@@ -797,50 +797,9 @@ func NewSyreenApp(
 	)
 
 	// Pre-block order (upgrade module must run before everything else)
-	app.mm.SetOrderPreBlockers(
-		upgradetypes.ModuleName,
-		minttypes.ModuleName,
-		distrtypes.ModuleName,
-		slashingtypes.ModuleName,
-		evidencetypes.ModuleName,
-		stakingtypes.ModuleName,
-		ibcexported.ModuleName,
-		ibctransfertypes.ModuleName,
-		authtypes.ModuleName,
-		banktypes.ModuleName,
-		govtypes.ModuleName,
-		crisistypes.ModuleName,
-		genutiltypes.ModuleName,
-		authz.ModuleName,
-		feegrant.ModuleName,
-		paramstypes.ModuleName,
-		vestingtypes.ModuleName,
-		consensusparamtypes.ModuleName,
-		ibctm.ModuleName,
-		tokenfactorytypes.ModuleName,
-		feemarkettypes.ModuleName,
-		mevprotectiontypes.ModuleName,
-		abstractaccounttypes.ModuleName,
-		farmingtypes.ModuleName,
-		perpstypes.ModuleName,
-		lendingtypes.ModuleName,
-		predicttypes.ModuleName,
-		launchpadtypes.ModuleName,
-		clmmtypes.ModuleName,
-		flashloantypes.ModuleName,
-		vaulttypes.ModuleName,
-		portfoliotypes.ModuleName,
-		optionstypes.ModuleName,
-		aiagenttypes.ModuleName,
-		dextypes.ModuleName,
-		intenttypes.ModuleName,
-		computetypes.ModuleName,
-		evmtypes.ModuleName,
-		identitytypes.ModuleName,
-		paymentstypes.ModuleName,
-	)
+	app.mm.SetOrderPreBlockers(upgradetypes.ModuleName)
 
-	// Begin block order (capability removed)
+	// Begin block order
 	app.mm.SetOrderBeginBlockers(
 		upgradetypes.ModuleName,
 		minttypes.ModuleName,
@@ -1033,6 +992,8 @@ func NewSyreenApp(
 		app.UpgradeKeeper.SetUpgradeHandler("v1.1.0", func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			sdkCtx := sdk.UnwrapSDKContext(ctx)
 			sdkCtx.Logger().Info("running v1.1.0 upgrade handler", "height", sdkCtx.BlockHeight())
+			// Supply fix (410M→400M) applied in genesis. No burn needed.
+			// Voting period (10min) also set in genesis. No param change needed.
 			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
 		})
 	}
