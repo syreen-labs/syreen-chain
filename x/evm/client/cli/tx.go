@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 
 	"syreen/x/evm/types"
@@ -77,18 +75,13 @@ Example:
 				return fmt.Errorf("invalid gas limit: %w", err)
 			}
 
-			nonce, err := queryEVMNonce(clientCtx, clientCtx.GetFromAddress().String())
-			if err != nil {
-				return fmt.Errorf("failed to query EVM nonce: %w", err)
-			}
-
 			msg := &types.MsgEthereumTx{
 				From:     clientCtx.GetFromAddress().String(),
 				To:       "",
 				Value:    "0",
 				GasLimit: gasLimit,
 				Data:     bytecodeHex,
-				Nonce:    nonce,
+				Nonce:    0,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -132,18 +125,13 @@ Example:
 				value = args[3]
 			}
 
-			nonce, err := queryEVMNonce(clientCtx, clientCtx.GetFromAddress().String())
-			if err != nil {
-				return fmt.Errorf("failed to query EVM nonce: %w", err)
-			}
-
 			msg := &types.MsgEthereumTx{
 				From:     clientCtx.GetFromAddress().String(),
 				To:       contractAddr,
 				Value:    value,
 				GasLimit: gasLimit,
 				Data:     calldataHex,
-				Nonce:    nonce,
+				Nonce:    0,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -159,18 +147,4 @@ func stripHexPrefix(s string) string {
 		return s[2:]
 	}
 	return s
-}
-
-// queryEVMNonce queries the EVM nonce for a bech32 address from the store
-func queryEVMNonce(clientCtx client.Context, bech32Addr string) (uint64, error) {
-	addr := common.BytesToAddress(clientCtx.GetFromAddress().Bytes())
-	key := append([]byte{types.PrefixNonce}, addr.Bytes()...)
-	res, _, err := clientCtx.QueryStore(key, types.StoreKey)
-	if err != nil {
-		return 0, nil // default to 0 if query fails
-	}
-	if len(res) == 0 {
-		return 0, nil
-	}
-	return binary.BigEndian.Uint64(res), nil
 }
