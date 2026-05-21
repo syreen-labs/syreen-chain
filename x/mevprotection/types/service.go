@@ -49,7 +49,7 @@ func (m *QueryParamsResponse) String() string          { return fmt.Sprintf("par
 func (m *QueryParamsResponse) XXX_MessageName() string { return "syreen.mevprotection.QueryParamsResponse" }
 
 type QueryCommittedTxRequest struct {
-	TxHash []byte `json:"tx_hash"`
+	TxHash []byte `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash"`
 }
 
 func (m *QueryCommittedTxRequest) ProtoMessage()           {}

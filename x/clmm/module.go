@@ -13,6 +13,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"syreen/x/clmm/client/cli"
 	"syreen/x/clmm/keeper"
 	"syreen/x/clmm/types"
 )
@@ -38,8 +39,8 @@ func (AppModule) ValidateGenesis(_ codec.JSONCodec, _ client.TxEncodingConfig, b
 	return data.Validate()
 }
 func (AppModule) RegisterGRPCGatewayRoutes(_ client.Context, _ *runtime.ServeMux) {}
-func (AppModule) GetTxCmd() *cobra.Command    { return nil }
-func (AppModule) GetQueryCmd() *cobra.Command  { return nil }
+func (AppModule) GetTxCmd() *cobra.Command    { return cli.GetTxCmd() }
+func (AppModule) GetQueryCmd() *cobra.Command  { return cli.GetQueryCmd() }
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 func (am AppModule) RegisterServices(cfg module.Configurator) { types.RegisterMsgServer(cfg.MsgServer(), *am.keeper) }

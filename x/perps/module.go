@@ -16,6 +16,7 @@ import (
 	"syreen/config"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"syreen/x/perps/client/cli"
 	"syreen/x/perps/keeper"
 	"syreen/x/perps/types"
 )
@@ -57,8 +58,8 @@ func (AppModule) ValidateGenesis(_ codec.JSONCodec, _ client.TxEncodingConfig, b
 }
 
 func (AppModule) RegisterGRPCGatewayRoutes(_ client.Context, _ *runtime.ServeMux) {}
-func (AppModule) GetTxCmd() *cobra.Command    { return nil }
-func (AppModule) GetQueryCmd() *cobra.Command  { return nil }
+func (AppModule) GetTxCmd() *cobra.Command    { return cli.GetTxCmd() }
+func (AppModule) GetQueryCmd() *cobra.Command  { return cli.GetQueryCmd() }
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 func (am AppModule) RegisterServices(cfg module.Configurator) {

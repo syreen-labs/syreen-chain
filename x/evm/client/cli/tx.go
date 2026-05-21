@@ -9,6 +9,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
+	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/spf13/cobra"
 
 	"syreen/x/evm/types"
@@ -74,10 +75,8 @@ Example:
 				return fmt.Errorf("invalid gas limit: %w", err)
 			}
 
-			from := clientCtx.GetFromAddress()
-
 			msg := &types.MsgEthereumTx{
-				From:     from.String(),
+				From:     clientCtx.GetFromAddress().String(),
 				To:       "",
 				Value:    "0",
 				GasLimit: gasLimit,
@@ -85,17 +84,7 @@ Example:
 				Nonce:    0,
 			}
 
-			if err := msg.ValidateBasic(); err != nil {
-				return err
-			}
-
-			fmt.Printf("EVM Deploy Transaction:\n")
-			fmt.Printf("  From:      %s\n", msg.From)
-			fmt.Printf("  Gas Limit: %d\n", msg.GasLimit)
-			fmt.Printf("  Bytecode:  %d bytes\n", len(bytecodeHex)/2)
-			fmt.Printf("\nTransaction will be broadcast via EVM handler.\n")
-
-			return nil
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
 		},
 	}
 
@@ -136,10 +125,8 @@ Example:
 				value = args[3]
 			}
 
-			from := clientCtx.GetFromAddress()
-
 			msg := &types.MsgEthereumTx{
-				From:     from.String(),
+				From:     clientCtx.GetFromAddress().String(),
 				To:       contractAddr,
 				Value:    value,
 				GasLimit: gasLimit,
@@ -147,20 +134,7 @@ Example:
 				Nonce:    0,
 			}
 
-			if err := msg.ValidateBasic(); err != nil {
-				return err
-			}
-
-			fmt.Printf("EVM Call Transaction:\n")
-			fmt.Printf("  From:     %s\n", msg.From)
-			fmt.Printf("  To:       %s\n", msg.To)
-			fmt.Printf("  Value:    %s\n", msg.Value)
-			fmt.Printf("  Gas:      %d\n", msg.GasLimit)
-			fmt.Printf("  Calldata: %d bytes\n", len(calldataHex)/2)
-			fmt.Printf("\nTransaction will be broadcast via EVM handler.\n")
-
-			_ = clientCtx
-			return nil
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
 		},
 	}
 

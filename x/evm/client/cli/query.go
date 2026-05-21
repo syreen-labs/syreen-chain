@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -41,13 +43,25 @@ func CmdQueryParams() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_ = clientCtx
-			fmt.Println("EVM Module Parameters:")
-			fmt.Printf("  evm_denom: %s\n", types.DefaultEVMDenom)
-			fmt.Printf("  enable_create: %v\n", types.DefaultEnableCreate)
-			fmt.Printf("  enable_call: %v\n", types.DefaultEnableCall)
-			fmt.Printf("  chain_id: 79733 (Syreen EVM)\n")
-			return nil
+
+			res, _, err := clientCtx.QueryStore([]byte("params"), types.StoreKey)
+			if err != nil || len(res) == 0 {
+				result := map[string]interface{}{
+					"evm_denom":     types.DefaultEVMDenom,
+					"enable_create": types.DefaultEnableCreate,
+					"enable_call":   types.DefaultEnableCall,
+					"chain_id":      79733,
+				}
+				bz, _ := json.MarshalIndent(result, "", "  ")
+				return clientCtx.PrintBytes(bz)
+			}
+
+			var parsed interface{}
+			if err := json.Unmarshal(res, &parsed); err != nil {
+				return clientCtx.PrintBytes(res)
+			}
+			bz, _ := json.MarshalIndent(parsed, "", "  ")
+			return clientCtx.PrintBytes(bz)
 		},
 	}
 
@@ -62,12 +76,36 @@ func CmdQueryCode() *cobra.Command {
 		Short: "Query the EVM bytecode at an address",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
 			if !common.IsHexAddress(args[0]) {
 				return fmt.Errorf("invalid hex address: %s", args[0])
 			}
 			addr := common.HexToAddress(args[0])
-			fmt.Printf("Code at %s: (query requires node connection)\n", addr.Hex())
-			return nil
+
+			// Query EVM code from the store using the code key prefix
+			key := append([]byte("code/"), addr.Bytes()...)
+			res, _, err := clientCtx.QueryStore(key, types.StoreKey)
+			if err != nil || len(res) == 0 {
+				result := map[string]interface{}{
+					"address": addr.Hex(),
+					"code":    "",
+					"size":    0,
+				}
+				bz, _ := json.MarshalIndent(result, "", "  ")
+				return clientCtx.PrintBytes(bz)
+			}
+
+			result := map[string]interface{}{
+				"address": addr.Hex(),
+				"code":    hex.EncodeToString(res),
+				"size":    len(res),
+			}
+			bz, _ := json.MarshalIndent(result, "", "  ")
+			return clientCtx.PrintBytes(bz)
 		},
 	}
 
@@ -82,13 +120,36 @@ func CmdQueryStorage() *cobra.Command {
 		Short: "Query a storage slot at an EVM address",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
 			if !common.IsHexAddress(args[0]) {
 				return fmt.Errorf("invalid hex address: %s", args[0])
 			}
 			addr := common.HexToAddress(args[0])
 			slot := common.HexToHash(args[1])
-			fmt.Printf("Storage at %s slot %s: (query requires node connection)\n", addr.Hex(), slot.Hex())
-			return nil
+
+			key := append([]byte("storage/"), append(addr.Bytes(), slot.Bytes()...)...)
+			res, _, err := clientCtx.QueryStore(key, types.StoreKey)
+			if err != nil || len(res) == 0 {
+				result := map[string]interface{}{
+					"address": addr.Hex(),
+					"slot":    slot.Hex(),
+					"value":   common.Hash{}.Hex(),
+				}
+				bz, _ := json.MarshalIndent(result, "", "  ")
+				return clientCtx.PrintBytes(bz)
+			}
+
+			result := map[string]interface{}{
+				"address": addr.Hex(),
+				"slot":    slot.Hex(),
+				"value":   common.BytesToHash(res).Hex(),
+			}
+			bz, _ := json.MarshalIndent(result, "", "  ")
+			return clientCtx.PrintBytes(bz)
 		},
 	}
 

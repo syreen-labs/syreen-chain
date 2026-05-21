@@ -9,7 +9,9 @@ var ModuleToggles = map[string]bool{
 	"lending":   false,
 	"aiagent":   false,
 	"predict":   false,
-	"flashloan": false, // Disabled for regulatory compliance
+	"flashloan": false,
+	"farming":   false,
+	"launchpad": false, // Disabled for regulatory compliance
 }
 
 // IsModuleEnabled returns whether a module is enabled.

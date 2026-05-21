@@ -56,6 +56,17 @@ import (
 	tokenfactorycli "syreen/x/tokenfactory/client/cli"
 	evmcli "syreen/x/evm/client/cli"
 	dexcli "syreen/x/dex/client/cli"
+	clmmcli "syreen/x/clmm/client/cli"
+	vaultcli "syreen/x/vault/client/cli"
+	portfoliocli "syreen/x/portfolio/client/cli"
+	farmingcli "syreen/x/farming/client/cli"
+	perpscli "syreen/x/perps/client/cli"
+	lendingcli "syreen/x/lending/client/cli"
+	flashloancli "syreen/x/flashloan/client/cli"
+	predictcli "syreen/x/predict/client/cli"
+	launchpadcli "syreen/x/launchpad/client/cli"
+	optionscli "syreen/x/options/client/cli"
+	aiagentcli "syreen/x/aiagent/client/cli"
 
 	syreenconfig "syreen/config"
 )
@@ -263,6 +274,17 @@ func queryCommand(_ module.BasicManager) *cobra.Command {
 		computecli.GetQueryCmd(),
 		evmcli.GetQueryCmd(),
 		dexcli.GetQueryCmd(),
+		clmmcli.GetQueryCmd(),
+		vaultcli.GetQueryCmd(),
+		portfoliocli.GetQueryCmd(),
+		farmingcli.GetQueryCmd(),
+		perpscli.GetQueryCmd(),
+		lendingcli.GetQueryCmd(),
+		flashloancli.GetQueryCmd(),
+		predictcli.GetQueryCmd(),
+		launchpadcli.GetQueryCmd(),
+		optionscli.GetQueryCmd(),
+		aiagentcli.GetQueryCmd(),
 	)
 
 	return cmd
@@ -301,6 +323,17 @@ func txCommand(_ module.BasicManager) *cobra.Command {
 		computecli.GetTxCmd(),
 		evmcli.GetTxCmd(),
 		dexcli.GetTxCmd(),
+		clmmcli.GetTxCmd(),
+		vaultcli.GetTxCmd(),
+		portfoliocli.GetTxCmd(),
+		farmingcli.GetTxCmd(),
+		perpscli.GetTxCmd(),
+		lendingcli.GetTxCmd(),
+		flashloancli.GetTxCmd(),
+		predictcli.GetTxCmd(),
+		launchpadcli.GetTxCmd(),
+		optionscli.GetTxCmd(),
+		aiagentcli.GetTxCmd(),
 		// IBC
 		ibctransfercli.NewTxCmd(),
 	)

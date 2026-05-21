@@ -30,6 +30,16 @@ func (q queryServer) Identity(ctx context.Context, req *types.QueryIdentityReque
 		return nil, fmt.Errorf("invalid request: address cannot be empty")
 	}
 	identity, found := q.Keeper.GetIdentity(ctx, req.Address)
+	if !found {
+		return &types.QueryIdentityResponse{
+			Identity: types.Identity{
+				Address: req.Address,
+				Level:   types.VerificationNone,
+				Status:  types.StatusPending,
+			},
+			Found: false,
+		}, nil
+	}
 	return &types.QueryIdentityResponse{
 		Identity: identity,
 		Found:    found,
