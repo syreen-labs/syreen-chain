@@ -87,7 +87,15 @@ func CmdQueryIdentity() *cobra.Command {
 			}
 
 			if len(res) == 0 {
-				return fmt.Errorf("identity not found for address %s", args[0])
+				result := map[string]interface{}{
+					"address":     args[0],
+					"found":       false,
+					"level":       "none",
+					"status":      "not_registered",
+					"trust_score": 0,
+				}
+				bz, _ := json.MarshalIndent(result, "", "  ")
+				return clientCtx.PrintBytes(bz)
 			}
 
 			var identity types.Identity
