@@ -1039,6 +1039,13 @@ func NewSyreenApp(
 		})
 	}
 
+	// v1.2.0: Full CLI/gRPC for all 21 modules, bug fixes, regulatory toggles
+	app.UpgradeKeeper.SetUpgradeHandler("v1.2.0", func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+		sdkCtx := sdk.UnwrapSDKContext(ctx)
+		sdkCtx.Logger().Info("running v1.2.0 upgrade handler", "height", sdkCtx.BlockHeight())
+		return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+	})
+
 	// v2.0.0: Founder vesting schedule (6-month cliff + 24-month linear vest)
 	app.UpgradeKeeper.SetUpgradeHandler("v2.0.0",
 		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
