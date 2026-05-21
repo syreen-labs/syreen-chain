@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 
 	"syreen/x/evm/types"
@@ -75,13 +77,18 @@ Example:
 				return fmt.Errorf("invalid gas limit: %w", err)
 			}
 
+			nonce, err := queryEVMNonce(clientCtx)
+			if err != nil {
+				return fmt.Errorf("failed to query EVM nonce: %w", err)
+			}
+
 			msg := &types.MsgEthereumTx{
 				From:     clientCtx.GetFromAddress().String(),
 				To:       "",
 				Value:    "0",
 				GasLimit: gasLimit,
 				Data:     bytecodeHex,
-				Nonce:    0,
+				Nonce:    nonce,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -125,13 +132,18 @@ Example:
 				value = args[3]
 			}
 
+			nonce, err := queryEVMNonce(clientCtx)
+			if err != nil {
+				return fmt.Errorf("failed to query EVM nonce: %w", err)
+			}
+
 			msg := &types.MsgEthereumTx{
 				From:     clientCtx.GetFromAddress().String(),
 				To:       contractAddr,
 				Value:    value,
 				GasLimit: gasLimit,
 				Data:     calldataHex,
-				Nonce:    0,
+				Nonce:    nonce,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -147,4 +159,33 @@ func stripHexPrefix(s string) string {
 		return s[2:]
 	}
 	return s
+}
+
+// queryEVMNonce queries the EVM nonce for the sender address.
+// The SDK ante handler increments the Cosmos account sequence BEFORE
+// the EVM message handler runs, so stateDB.GetNonce sees sequence+1.
+// We must account for this by adding 1 to the Cosmos sequence.
+func queryEVMNonce(clientCtx client.Context) (uint64, error) {
+	// Query EVM store nonce
+	addr := common.BytesToAddress(clientCtx.GetFromAddress().Bytes())
+	key := append([]byte{types.PrefixNonce}, addr.Bytes()...)
+	var evmNonce uint64
+	res, _, err := clientCtx.QueryStore(key, types.StoreKey)
+	if err == nil && len(res) >= 8 {
+		evmNonce = binary.BigEndian.Uint64(res)
+	}
+
+	// Query Cosmos account sequence and add 1 to match what the
+	// keeper will see after the ante handler increments it
+	var expectedCosmosNonce uint64
+	_, seq, err := clientCtx.AccountRetriever.GetAccountNumberSequence(clientCtx, clientCtx.GetFromAddress())
+	if err == nil {
+		expectedCosmosNonce = seq + 1
+	}
+
+	// Return the higher of the two (matches stateDB.GetNonce behavior)
+	if expectedCosmosNonce > evmNonce {
+		return expectedCosmosNonce, nil
+	}
+	return evmNonce, nil
 }
