@@ -742,13 +742,23 @@ func (s *StateDB) RevertToSnapshot(id int) {
 // CommitSnapshots writes all pending snapshot caches to the parent store.
 // Must be called after successful EVM execution to persist cached KVStore writes.
 func (s *StateDB) CommitSnapshots() {
-	// Write snapshot caches from bottom to top (oldest first)
-	for _, snap := range s.snapshots {
+	if len(s.snapshots) == 0 {
+		return
+	}
+	// Restore s.ctx to the root context (the parent saved in the first snapshot)
+	// so that any writes after CommitSnapshots use the original transaction context.
+	rootCtx := s.snapshots[0].cacheCtx
+
+	// Write snapshot caches from top to bottom (innermost first)
+	// so each child flushes into its parent before the parent flushes into the grandparent.
+	for i := len(s.snapshots) - 1; i >= 0; i-- {
+		snap := s.snapshots[i]
 		if snap.cacheWrite != nil {
 			snap.cacheWrite()
 		}
 	}
 	s.snapshots = nil
+	s.ctx = rootCtx
 }
 
 // --- Logs ---

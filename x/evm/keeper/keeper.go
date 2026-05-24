@@ -131,22 +131,10 @@ func (k Keeper) ExecuteEVMTx(ctx sdk.Context, msg *types.MsgEthereumTx) (*Execut
 	value := msg.GetValue()
 	to := msg.GetToAddress()
 
-	// H1: Cap gas limit to remaining SDK block gas and MaxGasLimit
+	// H1: Cap gas limit to MaxGasLimit only — EVM gas runs independently from SDK gas
 	gasLimit := msg.GasLimit
 	if gasLimit > MaxGasLimit {
 		gasLimit = MaxGasLimit
-	}
-	if ctx.GasMeter().Limit() > 0 {
-		consumed := ctx.GasMeter().GasConsumed()
-		limit := ctx.GasMeter().Limit()
-		if consumed >= limit {
-			gasLimit = 0
-		} else {
-			remaining := limit - consumed
-			if gasLimit > remaining {
-				gasLimit = remaining
-			}
-		}
 	}
 
 	// EIP-2028: Charge SDK gas for calldata (16 gas per non-zero byte, 4 per zero byte)
