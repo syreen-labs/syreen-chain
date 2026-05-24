@@ -44,7 +44,7 @@ func CmdQueryParams() *cobra.Command {
 				return err
 			}
 
-			res, _, err := clientCtx.QueryStore([]byte("params"), types.StoreKey)
+			res, _, err := clientCtx.QueryStore(types.KeyParams(), types.StoreKey)
 			if err != nil || len(res) == 0 {
 				result := map[string]interface{}{
 					"evm_denom":     types.DefaultEVMDenom,
@@ -87,7 +87,7 @@ func CmdQueryCode() *cobra.Command {
 			addr := common.HexToAddress(args[0])
 
 			// Query EVM code from the store using the code key prefix
-			key := append([]byte("code/"), addr.Bytes()...)
+			key := types.KeyCode(addr.Bytes())
 			res, _, err := clientCtx.QueryStore(key, types.StoreKey)
 			if err != nil || len(res) == 0 {
 				result := map[string]interface{}{
@@ -131,7 +131,7 @@ func CmdQueryStorage() *cobra.Command {
 			addr := common.HexToAddress(args[0])
 			slot := common.HexToHash(args[1])
 
-			key := append([]byte("storage/"), append(addr.Bytes(), slot.Bytes()...)...)
+			key := types.KeyStorage(addr.Bytes(), slot.Bytes())
 			res, _, err := clientCtx.QueryStore(key, types.StoreKey)
 			if err != nil || len(res) == 0 {
 				result := map[string]interface{}{

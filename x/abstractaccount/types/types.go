@@ -38,6 +38,11 @@ type Permission struct {
 	AllowedDenoms []string  `json:"allowed_denoms,omitempty"`
 }
 
+func (m *Permission) ProtoMessage()           {}
+func (m *Permission) Reset()                  { *m = Permission{} }
+func (m *Permission) String() string          { return fmt.Sprintf("Permission{%s, max=%s}", m.MsgType, m.MaxAmount) }
+func (m *Permission) XXX_MessageName() string { return "syreen.abstractaccount.Permission" }
+
 // SessionKey represents a temporary key with scoped permissions
 type SessionKey struct {
 	Key         string       `json:"key"`

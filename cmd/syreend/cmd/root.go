@@ -313,7 +313,7 @@ func txCommand(_ module.BasicManager) *cobra.Command {
 		bankcli.NewTxCmd(address.NewBech32Codec("syreen")),
 		NewStakingTxCmd(), // Custom staking cmds — workaround for SDK v0.50 bech32 address codec bug
 		govcli.NewTxCmd(nil),
-		distrcli.NewTxCmd(address.NewBech32Codec("syreen"), address.NewBech32Codec("syreenvaloper")),
+		distrcli.NewTxCmd(address.NewBech32Codec("syreenvaloper"), address.NewBech32Codec("syreen")),
 		NewSlashingTxCmd(),
 		// Custom module tx commands
 		tokenfactorycli.GetTxCmd(),
