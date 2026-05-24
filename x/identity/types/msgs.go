@@ -30,6 +30,13 @@ func (m *MsgRegisterIdentity) Reset()                  { *m = MsgRegisterIdentit
 func (m *MsgRegisterIdentity) String() string          { return fmt.Sprintf("register_identity: %s level=%s", m.Address, m.Level) }
 func (m *MsgRegisterIdentity) XXX_MessageName() string { return "syreen.identity.MsgRegisterIdentity" }
 
+// GetSigners ensures only the identity owner can register their own identity.
+// FIX: Prevents spoofing — TX signer must match the identity address.
+func (m *MsgRegisterIdentity) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Address)
+	return []sdk.AccAddress{addr}
+}
+
 func (m *MsgRegisterIdentity) ValidateBasic() error {
 	_, err := sdk.AccAddressFromBech32(m.Address)
 	if err != nil {

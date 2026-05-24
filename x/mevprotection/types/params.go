@@ -7,11 +7,11 @@ import (
 )
 
 // MinCommitWindow is the minimum allowed commit window to prevent MEV via too-short windows.
-const MinCommitWindow = uint64(3)
+const MinCommitWindow = uint64(10)
 
 var DefaultFairOrderConfig = FairOrderConfig{
 	EnableCommitReveal: true,
-	CommitWindow:       3, // 3 blocks (minimum)
+	CommitWindow:       20, // 20 blocks (~7.5s at 375ms)
 	RevealWindow:       1, // 1 block
 	MaxTxDelay:         3, // 3 blocks
 }

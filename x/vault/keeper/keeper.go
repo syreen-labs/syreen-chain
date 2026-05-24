@@ -169,6 +169,15 @@ func (k Keeper) GetDepositsByVault(ctx context.Context, vaultID uint64) []types.
 	return deposits
 }
 
+// GetAllDeposits returns all deposits across all vaults (for genesis export).
+func (k Keeper) GetAllDeposits(ctx context.Context) []types.VaultDeposit {
+	var allDeposits []types.VaultDeposit
+	for _, vault := range k.GetAllVaults(ctx) {
+		allDeposits = append(allDeposits, k.GetDepositsByVault(ctx, vault.ID)...)
+	}
+	return allDeposits
+}
+
 // ============================================================
 // Business Logic
 // ============================================================

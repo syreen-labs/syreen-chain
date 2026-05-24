@@ -14,6 +14,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"syreen/config"
 	"syreen/x/farming/client/cli"
 	"syreen/x/farming/keeper"
 	"syreen/x/farming/types"
@@ -97,6 +98,9 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, _ codec.JSONCodec) json.RawMe
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 func (am AppModule) BeginBlock(goCtx context.Context) error {
+	if !config.IsModuleEnabled("farming") {
+		return nil
+	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	am.keeper.DistributeRewards(ctx)
 	return nil

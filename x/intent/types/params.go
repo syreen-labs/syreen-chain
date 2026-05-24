@@ -28,8 +28,6 @@ var (
 		"/cosmos.bank.v1beta1.MsgSend",
 		"/cosmos.bank.v1beta1.MsgMultiSend",
 		"/ibc.applications.transfer.v1.MsgTransfer",
-		"/syreen.tokenfactory.MsgMint",
-		"/syreen.tokenfactory.MsgBurn",
 		"/syreen.compute.MsgExecuteContract",
 	}
 )

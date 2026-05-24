@@ -201,28 +201,22 @@ func (k Keeper) CalculateFee(ctx context.Context, laneName string, gasWanted int
 // BurnBaseFee burns the base fee portion and returns the tip (remainder).
 // burnAmount = fees * burnRatio
 // tip = fees - burnAmount (sent to the proposer via fee collector)
+// BurnBaseFee burns the fees passed in directly — the caller (ante decorator)
+// has already applied BurnRatio to calculate the correct burn amount.
+// FIX: Previously BurnRatio was applied TWICE (once in ante, once here), causing
+// only ~64% of fees to be burned instead of 80%. Now burns the exact amount passed in.
 func (k Keeper) BurnBaseFee(ctx context.Context, fees sdk.Coins) error {
 	params := k.GetParams(ctx)
 	if !params.EnableFeeBurn || fees.IsZero() {
 		return nil
 	}
 
-	burnCoins := sdk.NewCoins()
-	for _, coin := range fees {
-		burnAmt := params.BurnRatio.MulInt(coin.Amount).TruncateInt()
-		if burnAmt.IsPositive() {
-			burnCoins = burnCoins.Add(sdk.NewCoin(coin.Denom, burnAmt))
-		}
+	if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, fees); err != nil {
+		return fmt.Errorf("failed to burn base fee: %w", err)
 	}
 
-	if !burnCoins.IsZero() {
-		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, burnCoins); err != nil {
-			return fmt.Errorf("failed to burn base fee: %w", err)
-		}
-
-		if err := k.recordBurn(ctx, burnCoins); err != nil {
-			return fmt.Errorf("failed to record burn: %w", err)
-		}
+	if err := k.recordBurn(ctx, fees); err != nil {
+		return fmt.Errorf("failed to record burn: %w", err)
 	}
 
 	return nil

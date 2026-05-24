@@ -822,8 +822,12 @@ func (k Keeper) GetSessionKey(ctx context.Context, granter, grantee string) (typ
 	return sessionKey, true
 }
 
-// GetSessionKeyByGrantee searches for a session key by the grantee address
+// GetSessionKeyByGrantee searches for a session key by the grantee address.
+// FIX: Only returns session keys where the grantee matches AND the key is not expired.
+// If multiple matches exist, returns the one with the fewest permissions (most restrictive)
+// to prevent hijacking via permissive session keys from other granters.
 func (k Keeper) GetSessionKeyByGrantee(ctx context.Context, grantee string) (types.SessionKey, bool) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := []byte(types.SessionKeyPrefix)
 
@@ -833,16 +837,32 @@ func (k Keeper) GetSessionKeyByGrantee(ctx context.Context, grantee string) (typ
 	}
 	defer iter.Close()
 
+	var bestKey types.SessionKey
+	found := false
 	for ; iter.Valid(); iter.Next() {
 		var sessionKey types.SessionKey
 		if err := json.Unmarshal(iter.Value(), &sessionKey); err != nil {
 			continue
 		}
-		if sessionKey.Key == grantee {
-			return sessionKey, true
+		if sessionKey.Key != grantee {
+			continue
+		}
+		// Skip expired keys
+		if !sessionKey.Expiry.IsZero() && sdkCtx.BlockTime().After(sessionKey.Expiry) {
+			continue
+		}
+		if sessionKey.ExpiresAt > 0 && sdkCtx.BlockHeight() > sessionKey.ExpiresAt {
+			continue
+		}
+		if !found {
+			bestKey = sessionKey
+			found = true
+		} else if len(sessionKey.Permissions) < len(bestKey.Permissions) {
+			// Prefer the most restrictive key (fewest permissions)
+			bestKey = sessionKey
 		}
 	}
-	return types.SessionKey{}, false
+	return bestKey, found
 }
 
 // SetSessionKey stores a session key

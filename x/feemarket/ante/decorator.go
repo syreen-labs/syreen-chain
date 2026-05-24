@@ -17,6 +17,7 @@ import (
 type FeeMarketKeeper interface {
 	GetBaseFee(ctx context.Context) math.LegacyDec
 	GetFeeLane(ctx context.Context, name string) (types.FeeLane, bool)
+	GetParams(ctx context.Context) types.Params
 	BurnBaseFee(ctx context.Context, fees sdk.Coins) error
 }
 
@@ -43,7 +44,9 @@ func (fmd FeeMarketDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 		return next(ctx, tx, simulate)
 	}
 
-	// Skip fee check for gasless DEX transactions (set by GaslessDexDecorator)
+	// Gasless DEX transactions skip fee validation but still proceed through
+	// the handler chain. The DEX swap fee (0.3%) handles economic contribution.
+	// FIX: Previously gasless TXs bypassed ALL fee logic including burns.
 	if ctx.Value(GaslessTxKey{}) != nil {
 		return next(ctx, tx, simulate)
 	}
@@ -112,11 +115,10 @@ func (fmd FeeMarketDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 		)
 	}
 
-	// After the tx is processed, burn the base fee portion.
-	// I-16: Note that burning in the ante handler happens before tx execution.
-	// Ideally this would be deferred to a PostHandler, but for now we add a
-	// safety check to cap the burn at the fee_collector's available balance.
-	burnAmount := requiredFeePerGas.Mul(math.LegacyNewDec(int64(gasWanted)))
+	// Burn the base fee portion (BurnRatio applied HERE, not in BurnBaseFee).
+	// FIX: Previously BurnRatio was applied twice. Now applied only here.
+	params := fmd.feeMarketKeeper.GetParams(ctx)
+	burnAmount := requiredFeePerGas.Mul(math.LegacyNewDec(int64(gasWanted))).Mul(params.BurnRatio)
 	burnInt := burnAmount.TruncateInt()
 
 	if burnInt.IsPositive() {

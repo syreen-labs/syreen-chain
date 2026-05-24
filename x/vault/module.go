@@ -62,7 +62,10 @@ func (am AppModule) InitGenesis(ctx sdk.Context, _ codec.JSONCodec, data json.Ra
 }
 
 func (am AppModule) ExportGenesis(ctx sdk.Context, _ codec.JSONCodec) json.RawMessage {
-	gs := types.GenesisState{Vaults: am.keeper.GetAllVaults(ctx)}
+	gs := types.GenesisState{
+		Vaults:   am.keeper.GetAllVaults(ctx),
+		Deposits: am.keeper.GetAllDeposits(ctx),
+	}
 	bz, _ := json.Marshal(gs)
 	return bz
 }

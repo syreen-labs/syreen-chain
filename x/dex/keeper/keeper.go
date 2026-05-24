@@ -575,14 +575,14 @@ func (k Keeper) Swap(ctx context.Context, sender string, poolID uint64, tokenIn 
 	// so both discounts stack multiplicatively.
 	feeResult := k.CalculateReferralFees(ctx, sender, tokenIn.Amount, effectiveFeeBps)
 
-	// H1-FIX: Only subtract TraderDiscount from reserves (it leaves the module).
-	// ReferrerAmount stays in the module account as claimable balance, so reserves
-	// should NOT be reduced by it — otherwise module goes insolvent when referrers claim.
+	// FIX: Subtract BOTH TraderDiscount AND ReferrerAmount from reserves.
+	// TraderDiscount leaves module immediately (sent to trader).
+	// ReferrerAmount stays as claimable balance but is NOT pool liquidity —
+	// it must be excluded from reserves to prevent insolvency when claimed.
 	feeAmount := tokenIn.Amount.Sub(amountInAfterFee)
 	referralTotal := math.ZeroInt()
 	if feeResult.HasReferral {
-		// Only the trader discount actually leaves the module account
-		referralTotal = feeResult.TraderDiscount
+		referralTotal = feeResult.TraderDiscount.Add(feeResult.ReferrerAmount)
 		if referralTotal.GT(feeAmount) {
 			referralTotal = feeAmount
 		}

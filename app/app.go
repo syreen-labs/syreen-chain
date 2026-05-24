@@ -1192,6 +1192,14 @@ func NewSyreenApp(
 		},
 	)
 
+	// v2.1.0: Security audit fixes — intent whitelist, fee burn, farming toggle,
+	// vault export, DEX referral accounting, session key lookup, identity signer, MEV window
+	app.UpgradeKeeper.SetUpgradeHandler("v2.1.0", func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+		sdkCtx := sdk.UnwrapSDKContext(ctx)
+		sdkCtx.Logger().Info("running v2.1.0 upgrade handler — security audit fixes", "height", sdkCtx.BlockHeight())
+		return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+	})
+
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
 			// If latest version is corrupt (e.g. mid-commit crash), try
