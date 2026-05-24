@@ -1081,6 +1081,45 @@ func NewSyreenApp(
 		return app.mm.RunMigrations(ctx, app.configurator, fromVM)
 	})
 
+	// v1.2.6: Enable inflation (0.5%-2% self-balancing) for long-term validator sustainability
+	app.UpgradeKeeper.SetUpgradeHandler("v1.2.6", func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+		sdkCtx := sdk.UnwrapSDKContext(ctx)
+		sdkCtx.Logger().Info("running v1.2.6 upgrade handler — enabling inflation", "height", sdkCtx.BlockHeight())
+
+		// Set mint params: 0.5% min, 2% max, 0.25% rate change, 67% goal bonded
+		mintParams := minttypes.Params{
+			MintDenom:           "usyreen",
+			InflationRateChange: math.LegacyNewDecWithPrec(25, 4),  // 0.25% = 0.0025
+			InflationMax:        math.LegacyNewDecWithPrec(2, 2),   // 2% = 0.02
+			InflationMin:        math.LegacyNewDecWithPrec(5, 3),   // 0.5% = 0.005
+			GoalBonded:          math.LegacyNewDecWithPrec(67, 2),  // 67% = 0.67
+			BlocksPerYear:       84153600,                          // ~375ms block time
+		}
+		if err := app.MintKeeper.Params.Set(sdkCtx, mintParams); err != nil {
+			return nil, fmt.Errorf("failed to set mint params: %w", err)
+		}
+
+		// Initialize the minter with starting inflation at 1% (midpoint)
+		minter := minttypes.NewMinter(
+			math.LegacyNewDecWithPrec(1, 2), // 1% initial inflation
+			math.LegacyNewDec(0),             // annual provisions recalculated automatically
+		)
+		if err := app.MintKeeper.Minter.Set(sdkCtx, minter); err != nil {
+			return nil, fmt.Errorf("failed to set minter: %w", err)
+		}
+
+		sdkCtx.Logger().Info("inflation enabled",
+			"inflation_min", "0.5%",
+			"inflation_max", "2%",
+			"rate_change", "0.25%",
+			"goal_bonded", "67%",
+			"initial_inflation", "1%",
+			"blocks_per_year", 84153600,
+		)
+
+		return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+	})
+
 	// v2.0.0: Founder vesting schedule (6-month cliff + 24-month linear vest)
 	app.UpgradeKeeper.SetUpgradeHandler("v2.0.0",
 		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
