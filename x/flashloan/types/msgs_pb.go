@@ -216,7 +216,7 @@ func (m *MsgCreateFlashPool) Unmarshal(dAtA []byte) error {
 		for shift := uint(0); ; shift += 7 { if shift >= 64 { return ErrIntOverflowFlashloan }; if iNdEx >= l { return io.ErrUnexpectedEOF }; b := dAtA[iNdEx]; iNdEx++; wire |= uint64(b&0x7F) << shift; if b < 0x80 { break } }
 		fieldNum := int32(wire >> 3); wireType := int(wire & 0x7)
 		if wireType == 4 { return fmt.Errorf("proto: MsgCreateFlashPool: wiretype end group for non-group") }
-		if fieldNum <= 0 { return fmt.Errorf("proto: MsgCreateFlashPool: illegal tag %d", fieldNum, wire) }
+		if fieldNum <= 0 { return fmt.Errorf("proto: MsgCreateFlashPool: illegal tag %d (wire type %d)", fieldNum, wire) }
 		switch fieldNum {
 		case 1:
 			if wireType != 2 { return fmt.Errorf("proto: wrong wireType = %d for field Authority", wireType) }

@@ -688,6 +688,15 @@ func (k Keeper) RecalculatePortfolio(ctx context.Context, address string) math.I
 // BeginBlock: auto-end expired competitions, detect whale activities
 // ============================================================
 
+// maxCompetitionsPerBlock bounds how many competitions are settled
+// (EndCompetitionAndDistribute) in a single block. Settlement scans every
+// participant entry, so an attacker able to grow the competition keyspace could
+// otherwise force unbounded per-block work and stall the chain. Competitions
+// beyond this cap settle in subsequent blocks (settlement a few blocks late is
+// acceptable). Deterministic: comps are iterated in sorted ID order below, so
+// all validators settle the identical bounded subset.
+const maxCompetitionsPerBlock = 50
+
 func (k Keeper) ProcessBeginBlock(ctx context.Context) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	height := sdkCtx.BlockHeight()
@@ -710,6 +719,7 @@ func (k Keeper) ProcessBeginBlock(ctx context.Context) {
 
 	sort.Slice(comps, func(i, j int) bool { return comps[i].ID < comps[j].ID })
 
+	settled := 0
 	for _, comp := range comps {
 		// Activate upcoming competitions
 		if comp.Status == types.CompStatusUpcoming && height >= comp.StartBlock {
@@ -719,9 +729,28 @@ func (k Keeper) ProcessBeginBlock(ctx context.Context) {
 
 		// Auto-end expired active competitions
 		if comp.Status == types.CompStatusActive && height >= comp.EndBlock {
+			// Cap settlement work per block; remaining competitions settle in
+			// subsequent blocks. Iteration is in sorted ID order (deterministic).
+			if settled >= maxCompetitionsPerBlock {
+				continue
+			}
 			comp.Status = types.CompStatusEnded
 			k.SetCompetition(ctx, comp)
-			k.EndCompetitionAndDistribute(ctx, comp.ID)
+			settled++
+
+			// Per-competition panic isolation: a single malformed competition
+			// must never panic BeginBlocker and halt the chain. Settlement state
+			// writes already happened above; wrap only the distribution call.
+			compID := comp.ID
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						sdkCtx.Logger().Error("portfolio: recovered from panic settling competition",
+							"competition_id", compID, "recover", r)
+					}
+				}()
+				k.EndCompetitionAndDistribute(ctx, compID)
+			}()
 		}
 	}
 }

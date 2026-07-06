@@ -230,8 +230,11 @@ func (k *Keeper) SyncStrategyStatuses(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	defer iter.Close()
 
+	// Collect the strategies whose status changed while iterating, then persist
+	// them after the iterator is closed. Calling SetStrategy (a store write) on a
+	// key under the live iterator is unsafe.
+	var toUpdate []types.Strategy
 	for ; iter.Valid(); iter.Next() {
 		if !bytes.HasPrefix(iter.Key(), prefix) {
 			break
@@ -249,20 +252,27 @@ func (k *Keeper) SyncStrategyStatuses(ctx context.Context) {
 			continue
 		}
 
+		changed := true
 		switch chain.Status {
 		case types.ChainStatusCompleted:
 			strategy.Status = types.StrategyStatusCompleted
-			k.SetStrategy(ctx, strategy)
 		case types.ChainStatusFailed:
 			strategy.Status = types.StrategyStatusFailed
-			k.SetStrategy(ctx, strategy)
 		case types.ChainStatusExpired:
 			strategy.Status = types.StrategyStatusFailed
-			k.SetStrategy(ctx, strategy)
 		case types.ChainStatusCancelled:
 			strategy.Status = types.StrategyStatusCancelled
-			k.SetStrategy(ctx, strategy)
+		default:
+			changed = false
 		}
+		if changed {
+			toUpdate = append(toUpdate, strategy)
+		}
+	}
+	iter.Close()
+
+	for _, strategy := range toUpdate {
+		k.SetStrategy(ctx, strategy)
 	}
 }
 

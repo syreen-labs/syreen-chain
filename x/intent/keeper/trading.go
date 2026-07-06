@@ -12,6 +12,17 @@ import (
 	"syreen/x/intent/types"
 )
 
+// DefaultDCASlippageBps is the conservative default maximum slippage (in basis
+// points, 1 bp = 0.01%) applied to each DCA/TWAP tranche. The DCA intent body
+// carries no user-configured slippage field, so per-tranche swaps derive their
+// minimum acceptable output from the current pool spot price reduced by this
+// tolerance. This prevents tranche swaps from executing with zero slippage
+// protection (minAmountOut = 0), which would leave them open to sandwiching.
+// LIMITATION: because DCAIntent has no slippage field, this default cannot be
+// overridden per-intent; if a user needs tighter/looser bounds, the intent body
+// schema must be extended with a MaxSlippage field.
+const DefaultDCASlippageBps = 100 // 1.00%
+
 // MaxIntentsPerBlock caps how many trading intents BeginBlock will process
 // in a single block. Unprocessed intents remain pending and will be considered
 // in subsequent blocks. Prevents BeginBlock from blowing past block-time budgets
@@ -203,9 +214,21 @@ func (k *Keeper) tryDCA(ctx context.Context, intent types.Intent) error {
 	moduleAddr := k.accountKeeper.GetModuleAddress(types.ModuleName)
 	tokenIn := sdk.NewCoin(body.InputDenom, perExecAmount)
 
+	// Derive a per-tranche minimum output from the current pool spot price so the
+	// swap is protected against sandwiching. GetSpotPrice returns OutputDenom per
+	// 1 InputDenom, so the quoted output for this tranche is spotPrice * perExecAmount.
+	// We require at least (1 - DefaultDCASlippageBps/10000) of that quote.
+	spotPrice, err := k.dexKeeper.GetSpotPrice(ctx, body.PoolID, body.InputDenom, body.OutputDenom)
+	if err != nil {
+		return fmt.Errorf("DCA price fetch failed (needed for slippage protection): %w", err)
+	}
+	quotedOut := spotPrice.MulInt(perExecAmount)
+	slippageFactor := math.LegacyNewDec(10000 - DefaultDCASlippageBps).QuoInt64(10000)
+	minOut := quotedOut.Mul(slippageFactor).TruncateInt()
+
 	cacheCtx, write := sdkCtx.CacheContext()
 
-	tokenOut, err := k.dexKeeper.Swap(cacheCtx, moduleAddr.String(), body.PoolID, tokenIn, math.ZeroInt())
+	tokenOut, err := k.dexKeeper.Swap(cacheCtx, moduleAddr.String(), body.PoolID, tokenIn, minOut)
 	if err != nil {
 		return fmt.Errorf("DCA swap failed: %w", err)
 	}

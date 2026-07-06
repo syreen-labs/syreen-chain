@@ -215,9 +215,9 @@ func (k Keeper) updatePositionFees(ctx context.Context, pool types.CLPool, pos *
 
 // CreatePool creates a new CL pool. Only the chain authority may create pools.
 func (k Keeper) CreatePool(ctx context.Context, sender, denomA, denomB string, tickSpacing int64, feeRate, initialPrice math.LegacyDec) (uint64, error) {
-	// Access control: only chain authority can create CL pools.
+	// Access control: only chain authority can create CL pools (governance-gated by design).
 	if sender != k.authority {
-		return 0, types.ErrUnauthorized
+		return 0, types.ErrUnauthorizedPoolCreate
 	}
 
 	// Validate initial price: must be positive and non-zero
@@ -821,8 +821,13 @@ func (k Keeper) findNextInitializedTick(ctx context.Context, pool types.CLPool, 
 
 	if zeroForOne {
 		// Search downward (price decreasing)
-		// Snap current tick down to spacing
-		searchTick := currentTick - (currentTick % spacing)
+		// Snap current tick down to spacing using integer floor division
+		// (Go's % truncates toward zero, which rounds negative ticks UP).
+		q := currentTick / spacing
+		if currentTick%spacing != 0 && currentTick < 0 {
+			q--
+		}
+		searchTick := q * spacing
 		if searchTick == currentTick {
 			searchTick -= spacing
 		}
@@ -842,7 +847,13 @@ func (k Keeper) findNextInitializedTick(ctx context.Context, pool types.CLPool, 
 	}
 
 	// Search upward (price increasing)
-	searchTick := currentTick - (currentTick % spacing) + spacing
+	// Snap current tick down to spacing using integer floor division
+	// (Go's % truncates toward zero, which rounds negative ticks UP), then step up.
+	q := currentTick / spacing
+	if currentTick%spacing != 0 && currentTick < 0 {
+		q--
+	}
+	searchTick := q*spacing + spacing
 	iterations := 0
 	for t := searchTick; t <= types.MaxTick; t += spacing {
 		iterations++

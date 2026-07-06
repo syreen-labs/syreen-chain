@@ -3,11 +3,24 @@ package ante
 import (
 	"context"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	"syreen/x/abstractaccount/types"
+)
+
+const (
+	// sponsorFeeDenom is the native denom a gas sponsor may cover.
+	sponsorFeeDenom = "usyreen"
+	// maxSponsoredGasPrice caps the fee a sponsor can be charged per unit of
+	// authorized gas (usyreen/gas). The chain min gas price is 0.001 and the
+	// feemarket base fee is ~0.01 usyreen/gas, so this leaves ~1000x headroom for
+	// legitimate sponsored txs while bounding total sponsor exposure to
+	// GasLimit * maxSponsoredGasPrice. A fixed constant keeps the check
+	// deterministic across all nodes (node-local MinGasPrices must not be used here).
+	maxSponsoredGasPrice = 10
 )
 
 // contextKey is an unexported type for context keys in this package.
@@ -65,7 +78,22 @@ func (gsd GasSponsorshipDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 		return next(ctx, tx, simulate)
 	}
 
-	// Sponsor found: deduct fees from the sponsor's account to fee_collector.
+	// SECURITY: The sponsor's budget is denominated in GAS (GasLimit/TotalGasUsed),
+	// but `fees` is an attacker-controlled coin amount. Transferring the full `fees`
+	// let a sponsored account drain its sponsor by attaching an arbitrarily large fee
+	// to a tiny-gas tx. Bound the sponsorable fee to the gas the sponsor authorized,
+	// priced at a fixed maximum gas price. Anything above that (or paid in a denom
+	// other than usyreen) is NOT sponsored — the tx falls through to normal fee
+	// deduction so the sponsored account pays it themselves.
+	feeAmount := fees.AmountOf(sponsorFeeDenom)
+	maxSponsoredAmt := sdkmath.NewIntFromUint64(gasWanted).Mul(sdkmath.NewIntFromUint64(maxSponsoredGasPrice))
+	if !fees.Equal(sdk.NewCoins(sdk.NewCoin(sponsorFeeDenom, feeAmount))) || feeAmount.GT(maxSponsoredAmt) {
+		// Fee is in a non-native denom or exceeds the sponsored allowance.
+		return next(ctx, tx, simulate)
+	}
+
+	// Sponsor found and fee within the authorized allowance: deduct fees from the
+	// sponsor's account to fee_collector.
 	sponsorAddr, err := sdk.AccAddressFromBech32(sponsor.Sponsor)
 	if err != nil {
 		return ctx, sdkerrors.ErrInvalidAddress.Wrapf("invalid sponsor address: %s", sponsor.Sponsor)
@@ -77,15 +105,10 @@ func (gsd GasSponsorshipDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 		return next(ctx, tx, simulate)
 	}
 
-	// Record gas usage against the sponsor's budget.
-	// Use a conservative estimate: min(gasWanted, fee amount) to avoid overcharging.
-	// NOTE: A PostHandler should be added for exact accounting using actual gas consumed.
-	budgetDeduction := gasWanted
-	feeAmount := fees.AmountOf("usyreen")
-	if !feeAmount.IsZero() && feeAmount.Uint64() < budgetDeduction {
-		budgetDeduction = feeAmount.Uint64()
-	}
-	gsd.aaKeeper.DeductGasSponsorship(ctx, sponsor, budgetDeduction)
+	// Record gas usage against the sponsor's budget. CheckGasSponsor already verified
+	// TotalGasUsed+gasWanted <= GasLimit, so deduct the authorized gas (units match the
+	// budget). This bounds total sponsor exposure to GasLimit * maxSponsoredGasPrice.
+	gsd.aaKeeper.DeductGasSponsorship(ctx, sponsor, gasWanted)
 
 	// Mark the context so downstream DeductFeeDecorator knows fees are paid.
 	ctx = ctx.WithValue(GasSponsoredKey, true)

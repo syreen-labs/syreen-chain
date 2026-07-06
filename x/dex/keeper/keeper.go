@@ -117,6 +117,16 @@ func (k Keeper) SetPool(ctx context.Context, pool types.Pool) {
 	kvStore.Set(types.PoolKey(pool.ID), bz)
 }
 
+// DeletePool removes the pool record and its denom-pair index. Used when a pool
+// is fully drained (all shares withdrawn, reserves zero) so the pair can be
+// recreated instead of being permanently bricked (ErrPoolDrained /
+// ErrPoolAlreadyExists). The pool ID is not reused.
+func (k Keeper) DeletePool(ctx context.Context, pool types.Pool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	kvStore.Delete(types.PoolKey(pool.ID))
+	kvStore.Delete(types.PoolByDenomPairKey(pool.DenomA, pool.DenomB))
+}
+
 func (k Keeper) GetAllPools(ctx context.Context) []types.Pool {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := []byte(types.PoolPrefix)
@@ -458,7 +468,17 @@ func (k Keeper) RemoveLiquidity(ctx context.Context, sender string, poolID uint6
 	pool.ReserveA = pool.ReserveA.Sub(amountA)
 	pool.ReserveB = pool.ReserveB.Sub(amountB)
 	pool.TotalShares = pool.TotalShares.Sub(sharesIn)
-	k.SetPool(ctx, pool)
+
+	// Full drain (all shares withdrawn -> reserves are now zero): delete the pool
+	// record AND its denom-pair index so the pair can be recreated. Otherwise the
+	// stale zero-reserve pool bricks the pair forever (AddLiquidity ->
+	// ErrPoolDrained, CreatePool -> ErrPoolAlreadyExists). Partial withdrawals
+	// (guaranteed non-zero TotalShares by the min-reserve guard above) persist.
+	if pool.TotalShares.IsZero() {
+		k.DeletePool(ctx, pool)
+	} else {
+		k.SetPool(ctx, pool)
+	}
 
 	k.Logger(ctx).Info("removed liquidity",
 		"pool_id", poolID,

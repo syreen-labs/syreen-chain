@@ -579,7 +579,18 @@ func (k *Keeper) WithdrawEarnings(ctx context.Context, msg *types.MsgWithdrawEar
 	return nil
 }
 
-// ExpireInvoices checks all pending invoices and marks expired ones. Called in BeginBlock.
+// maxExpiryScanPerBlock bounds how many pending invoices are expired in a single
+// block. ExpireInvoices does a full scan of the invoice keyspace every block with
+// no expiry index; that keyspace is attacker-growable, so an unbounded scan lets
+// per-block cost grow forever until the chain misses timeout_commit and stalls.
+// Capping the number of expirations per block bounds worst-case work; invoices
+// beyond the cap are expired over subsequent blocks (expiry a few blocks late is
+// acceptable). Deterministic: store iteration order is identical on all
+// validators. Long-term fix: add a height-bucketed expiry index so only invoices
+// due at/before the current height are visited.
+const maxExpiryScanPerBlock = 500
+
+// ExpireInvoices checks pending invoices and marks expired ones. Called in BeginBlock.
 func (k *Keeper) ExpireInvoices(ctx context.Context) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	kvStore := k.storeService.OpenKVStore(ctx)
@@ -604,6 +615,11 @@ func (k *Keeper) ExpireInvoices(ctx context.Context) {
 
 		if invoice.Status == types.InvoiceStatusPending && invoice.ExpiresAtBlock > 0 && sdkCtx.BlockHeight() >= invoice.ExpiresAtBlock {
 			toExpire = append(toExpire, invoice)
+			// Bound per-block work: stop collecting once the cap is reached.
+			// Remaining expired invoices are handled in subsequent blocks.
+			if len(toExpire) >= maxExpiryScanPerBlock {
+				break
+			}
 		}
 	}
 

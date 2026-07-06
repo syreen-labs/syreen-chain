@@ -494,7 +494,19 @@ func (k Keeper) IsVerified(ctx context.Context, address string) bool {
 	return true
 }
 
-// ExpireIdentities checks all identities and marks expired ones (BeginBlocker).
+// maxExpiryScanPerBlock bounds how many identities are expired in a single block.
+// ExpireIdentities does a full scan of the identity keyspace every block with no
+// expiry index; that keyspace is attacker-growable, so an unbounded scan lets
+// per-block cost grow forever until the chain misses timeout_commit and stalls.
+// Capping the number of expirations per block bounds worst-case work; identities
+// beyond the cap are expired over subsequent blocks (expiry a few blocks late is
+// acceptable — once expired they no longer match the filter). Deterministic:
+// store iteration order is identical on all validators. Long-term fix: add a
+// height-bucketed expiry index so only identities due at/before the current
+// height are visited.
+const maxExpiryScanPerBlock = 500
+
+// ExpireIdentities checks identities and marks expired ones (BeginBlocker).
 func (k *Keeper) ExpireIdentities(ctx context.Context) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	kvStore := k.storeService.OpenKVStore(ctx)
@@ -520,6 +532,11 @@ func (k *Keeper) ExpireIdentities(ctx context.Context) {
 		// Expire verified identities past their expiry block
 		if identity.Status == types.StatusVerified && identity.ExpiresAtBlock > 0 && sdkCtx.BlockHeight() >= identity.ExpiresAtBlock {
 			toExpire = append(toExpire, identity)
+			// Bound per-block work: stop collecting once the cap is reached.
+			// Remaining expired identities are handled in subsequent blocks.
+			if len(toExpire) >= maxExpiryScanPerBlock {
+				break
+			}
 		}
 	}
 

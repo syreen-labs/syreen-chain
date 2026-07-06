@@ -10,6 +10,7 @@ import (
 
 	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
+	"cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -255,8 +256,9 @@ func (k Keeper) CompleteSolverUnbonding(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	defer iter.Close()
-
+	// Collect keys to delete while iterating, then delete after the iterator is
+	// closed. Deleting under a live iterator over the same range is unsafe.
+	var keysToDelete [][]byte
 	for ; iter.Valid(); iter.Next() {
 		var solver types.Solver
 		if err := json.Unmarshal(iter.Value(), &solver); err != nil {
@@ -278,11 +280,18 @@ func (k Keeper) CompleteSolverUnbonding(ctx context.Context) {
 				}
 			}
 
-			// Remove solver from store — must happen regardless of bank send result
-			// to ensure deterministic state across all validators.
-			kvStore.Delete(iter.Key())
+			// Queue solver for removal — must happen regardless of bank send result
+			// to ensure deterministic state across all validators. Copy the key since
+			// the iterator may reuse the underlying buffer.
+			key := append([]byte(nil), iter.Key()...)
+			keysToDelete = append(keysToDelete, key)
 			k.Logger(ctx).Info("solver unbonding complete", "address", solver.Address)
 		}
+	}
+	iter.Close()
+
+	for _, key := range keysToDelete {
+		kvStore.Delete(key)
 	}
 }
 
@@ -435,6 +444,14 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 		return types.ErrInvalidSolution
 	}
 
+	// Snapshot the creator's output-denom balance BEFORE the solution executes so
+	// that outcome verification can measure the delta actually delivered by the
+	// solver rather than the creator's pre-existing holdings.
+	var swapOutputBefore math.Int
+	if intent.IntentType == types.IntentTypeSwap {
+		swapOutputBefore = k.swapOutputBalanceBefore(ctx, intent)
+	}
+
 	// Execute the solution's messages
 	if err := k.executeSolutionMsgs(ctx, winningSolution); err != nil {
 		// Mark intent as failed, not fulfilled
@@ -499,7 +516,7 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 	// Outcome verification: for swap intents, verify the creator's balance changed
 	// in the expected direction. If not, mark intent as failed and slash the solver.
 	if intent.IntentType == types.IntentTypeSwap {
-		if verifyErr := k.verifySwapOutcome(ctx, intent, solverAddrStr, params); verifyErr != nil {
+		if verifyErr := k.verifySwapOutcome(ctx, intent, solverAddrStr, params, swapOutputBefore); verifyErr != nil {
 			k.Logger(ctx).Error("outcome verification failed",
 				"intent_id", msg.IntentID, "solver", solverAddrStr, "error", verifyErr)
 			// Mark as failed, slash solver
@@ -637,17 +654,28 @@ func (k *Keeper) executeSolutionMsgs(ctx context.Context, solution *types.Soluti
 			intentCreatorAddr, _ = sdk.AccAddressFromBech32(intent.Creator)
 		}
 
-		if hasSigners, ok := sdkMsg.(interface{ GetSigners() []sdk.AccAddress }); ok {
-			signers := hasSigners.GetSigners()
-			for _, signer := range signers {
-				if signer.Equals(moduleAccAddr) {
-					continue
-				}
-				if intentCreatorAddr != nil && signer.Equals(intentCreatorAddr) {
-					continue
-				}
-				return fmt.Errorf("execution msg %d has unauthorized signer %s (must be module account or intent creator)", i, signer)
+		// SDK v0.53 removed the legacy sdk.Msg.GetSigners() method, so a type
+		// assertion on `interface{ GetSigners() []sdk.AccAddress }` silently fails
+		// (ok=false) for bank/IBC/compute messages, which would skip authorization
+		// entirely and let a solver spend arbitrary accounts' funds. Resolve signers
+		// through the codec's protobuf signing context instead, and FAIL CLOSED: any
+		// error or a message with no resolvable signers is rejected, never executed.
+		signerBzs, _, err := k.cdc.GetMsgV1Signers(sdkMsg)
+		if err != nil {
+			return fmt.Errorf("execution msg %d (type %s): failed to resolve signers: %w", i, msgTypeURL, err)
+		}
+		if len(signerBzs) == 0 {
+			return fmt.Errorf("execution msg %d (type %s) has no resolvable signers; refusing to execute", i, msgTypeURL)
+		}
+		for _, signerBz := range signerBzs {
+			signer := sdk.AccAddress(signerBz)
+			if signer.Equals(moduleAccAddr) {
+				continue
 			}
+			if intentCreatorAddr != nil && signer.Equals(intentCreatorAddr) {
+				continue
+			}
+			return fmt.Errorf("execution msg %d has unauthorized signer %s (must be module account or intent creator)", i, signer)
 		}
 
 		// Route and execute the message against cacheCtx
@@ -656,8 +684,7 @@ func (k *Keeper) executeSolutionMsgs(ctx context.Context, solution *types.Soluti
 			return fmt.Errorf("no handler found for execution msg %d (type %s)", i, msgTypeURL)
 		}
 
-		_, err := handler(cacheCtx, sdkMsg)
-		if err != nil {
+		if _, err := handler(cacheCtx, sdkMsg); err != nil {
 			return fmt.Errorf("execution msg %d (type %s) failed: %w", i, msgTypeURL, err)
 		}
 	}
@@ -1099,11 +1126,33 @@ func (k Keeper) nextIntentID(ctx context.Context) string {
 	return strconv.FormatUint(counter, 10)
 }
 
+// swapOutputBalanceBefore snapshots the creator's balance of the swap intent's
+// output denom prior to executing the solution messages. The returned value is
+// compared against the post-execution balance in verifySwapOutcome so that the
+// check measures the DELTA delivered by the solver rather than the creator's
+// absolute holdings (which could already exceed MinOutputAmount).
+func (k *Keeper) swapOutputBalanceBefore(ctx context.Context, intent types.Intent) math.Int {
+	var swapBody types.SwapIntent
+	if err := json.Unmarshal(intent.Body, &swapBody); err != nil {
+		// Non-swap body format — verification will be skipped, return zero.
+		return math.ZeroInt()
+	}
+	creatorAddr, err := sdk.AccAddressFromBech32(intent.Creator)
+	if err != nil {
+		return math.ZeroInt()
+	}
+	return k.bankKeeper.GetBalance(ctx, creatorAddr, swapBody.OutputDenom).Amount
+}
+
 // verifySwapOutcome checks that a swap intent's solution actually produced
-// the expected outcome — the creator must have received at least MinOutputAmount
-// of the output denom. This prevents solvers from submitting solutions that
-// appear to succeed but don't actually deliver the expected tokens.
-func (k *Keeper) verifySwapOutcome(ctx context.Context, intent types.Intent, solverAddr string, params types.Params) error {
+// the expected outcome — the creator must have RECEIVED at least MinOutputAmount
+// of the output denom as a result of the solution executing. It compares the
+// post-execution balance against the pre-execution snapshot (beforeBalance) and
+// requires (after - before) >= MinOutputAmount. This prevents solvers from
+// submitting solutions that appear to succeed but don't actually deliver the
+// expected tokens, including the case where the creator already held >=
+// MinOutputAmount before the solution ran.
+func (k *Keeper) verifySwapOutcome(ctx context.Context, intent types.Intent, solverAddr string, params types.Params, beforeBalance math.Int) error {
 	var swapBody types.SwapIntent
 	if err := json.Unmarshal(intent.Body, &swapBody); err != nil {
 		// If we can't parse the body, skip verification (non-swap format)
@@ -1116,12 +1165,13 @@ func (k *Keeper) verifySwapOutcome(ctx context.Context, intent types.Intent, sol
 		return fmt.Errorf("invalid creator address: %w", err)
 	}
 
-	outputBalance := k.bankKeeper.GetBalance(ctx, creatorAddr, swapBody.OutputDenom)
+	afterBalance := k.bankKeeper.GetBalance(ctx, creatorAddr, swapBody.OutputDenom).Amount
 
-	// The creator should have received at least MinOutputAmount
-	if outputBalance.Amount.LT(swapBody.MinOutputAmount) {
-		return fmt.Errorf("creator output balance %s is less than min expected %s %s",
-			outputBalance.Amount, swapBody.MinOutputAmount, swapBody.OutputDenom)
+	// The creator should have received at least MinOutputAmount as a delta.
+	delta := afterBalance.Sub(beforeBalance)
+	if delta.LT(swapBody.MinOutputAmount) {
+		return fmt.Errorf("creator received %s %s, less than min expected %s",
+			delta, swapBody.OutputDenom, swapBody.MinOutputAmount)
 	}
 
 	return nil

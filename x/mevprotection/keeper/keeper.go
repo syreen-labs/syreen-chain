@@ -529,6 +529,18 @@ func (k Keeper) SetParams(ctx context.Context, params types.Params) error {
 	return kvStore.Set([]byte("params"), bz)
 }
 
+// maxPrunePerBlock bounds how many expired commits are pruned in a single block.
+// PruneExpiredCommits does a full scan of the committed-tx keyspace every block
+// with no expiry index; that keyspace is attacker-growable, so an unbounded scan
+// lets per-block cost grow forever until the chain misses timeout_commit and
+// stalls. Capping the number of prunes per block bounds worst-case work; commits
+// beyond the cap are pruned over subsequent blocks (pruning a few blocks late is
+// acceptable — once deleted they leave the candidate set). Deterministic: store
+// iteration order is identical on all validators. Long-term fix: add a
+// height-bucketed expiry index so only commits due at/before the current height
+// are visited.
+const maxPrunePerBlock = 500
+
 // PruneExpiredCommits removes committed transactions whose reveal window has expired.
 // Should be called in BeginBlocker to prevent unbounded state growth.
 func (k Keeper) PruneExpiredCommits(ctx context.Context) {
@@ -543,12 +555,19 @@ func (k Keeper) PruneExpiredCommits(ctx context.Context) {
 	}
 	defer iter.Close()
 
+	// prunedCommits counts committed-tx entries selected for deletion (each may
+	// also enqueue a corresponding reveal key); it is bounded by maxPrunePerBlock.
 	var keysToDelete [][]byte
+	prunedCommits := 0
 	for ; iter.Valid(); iter.Next() {
 		var committed types.CommittedTx
 		if err := json.Unmarshal(iter.Value(), &committed); err != nil {
 			// Corrupted entry — mark for deletion
 			keysToDelete = append(keysToDelete, append([]byte(nil), iter.Key()...))
+			prunedCommits++
+			if prunedCommits >= maxPrunePerBlock {
+				break
+			}
 			continue
 		}
 
@@ -558,6 +577,12 @@ func (k Keeper) PruneExpiredCommits(ctx context.Context) {
 			// Also delete corresponding reveal if it exists
 			revealKey := types.RevealedTxKey(committed.TxHash)
 			keysToDelete = append(keysToDelete, revealKey)
+			// Bound per-block work: stop collecting once the cap is reached.
+			// Remaining expired commits are pruned in subsequent blocks.
+			prunedCommits++
+			if prunedCommits >= maxPrunePerBlock {
+				break
+			}
 		}
 	}
 

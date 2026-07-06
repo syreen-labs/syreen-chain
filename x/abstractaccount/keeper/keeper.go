@@ -738,17 +738,21 @@ func (k Keeper) ExecuteBatch(ctx context.Context, sender string, messages []json
 		}
 
 		// Verify the sender is a signer of this message (authorization check).
-		if hasSigners, ok := sdkMsg.(interface{ GetSigners() []sdk.AccAddress }); ok {
-			signers := hasSigners.GetSigners()
-			senderIsSigner := false
-			for _, signer := range signers {
-				if signer.Equals(senderAddr) {
-					senderIsSigner = true
-					break
-				}
-			}
-			if !senderIsSigner {
-				return nil, fmt.Errorf("batch message %d: sender %s is not a signer of this message", i, sender)
+		// SDK v0.53 removed sdk.Msg.GetSigners(), so the legacy type assertion fails
+		// (ok=false) for bank/IBC/etc. messages and would skip this check entirely,
+		// allowing a batch to spend arbitrary accounts' funds. Resolve signers via the
+		// codec's signing context and FAIL CLOSED: every inner message must be signed
+		// solely by the smart account executing the batch.
+		signerBzs, _, err := k.cdc.GetMsgV1Signers(sdkMsg)
+		if err != nil {
+			return nil, fmt.Errorf("batch message %d: failed to resolve signers: %w", i, err)
+		}
+		if len(signerBzs) == 0 {
+			return nil, fmt.Errorf("batch message %d: no resolvable signers; refusing to execute", i)
+		}
+		for _, signerBz := range signerBzs {
+			if !sdk.AccAddress(signerBz).Equals(senderAddr) {
+				return nil, fmt.Errorf("batch message %d: sender %s is not the sole signer of this message", i, sender)
 			}
 		}
 

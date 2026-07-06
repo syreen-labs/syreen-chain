@@ -85,7 +85,7 @@ func (fmd FeeMarketDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 	requiredFeePerGas := baseFee.Mul(lane.BaseFeeMultiplier)
 
 	// Calculate minimum total fee: requiredFeePerGas * gasWanted
-	requiredTotalFee := requiredFeePerGas.Mul(math.LegacyNewDec(int64(gasWanted)))
+	requiredTotalFee := requiredFeePerGas.Mul(math.LegacyNewDecFromInt(math.NewIntFromUint64(gasWanted)))
 
 	// Enforce minimum fee of 1000 usyreen (~0.001 SYREEN) to prevent zero-fee spam (H-07).
 	// When the base fee drops very low (e.g., near-zero during low activity),
@@ -118,7 +118,7 @@ func (fmd FeeMarketDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 	// Burn the base fee portion (BurnRatio applied HERE, not in BurnBaseFee).
 	// FIX: Previously BurnRatio was applied twice. Now applied only here.
 	params := fmd.feeMarketKeeper.GetParams(ctx)
-	burnAmount := requiredFeePerGas.Mul(math.LegacyNewDec(int64(gasWanted))).Mul(params.BurnRatio)
+	burnAmount := requiredFeePerGas.Mul(math.LegacyNewDecFromInt(math.NewIntFromUint64(gasWanted))).Mul(params.BurnRatio)
 	burnInt := burnAmount.TruncateInt()
 
 	if burnInt.IsPositive() {

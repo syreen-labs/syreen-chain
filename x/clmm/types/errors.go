@@ -19,4 +19,9 @@ var (
 	ErrInvalidPrice         = errors.Register(ModuleName, 15, "invalid initial price")
 	ErrSameDenom            = errors.Register(ModuleName, 16, "denomA and denomB must be different")
 	ErrAmountBelowMin       = errors.Register(ModuleName, 17, "token amount below minimum")
+	// ErrUnauthorizedPoolCreate is returned when a non-authority account attempts
+	// to create a CL pool. Pool creation is intentionally governance-gated; this is
+	// a distinct, clear error (the generic ErrUnauthorized "not position owner"
+	// message was misleading on the pool-creation path).
+	ErrUnauthorizedPoolCreate = errors.Register(ModuleName, 18, "only chain authority (governance) may create CL pools")
 )

@@ -1200,6 +1200,93 @@ func NewSyreenApp(
 		return app.mm.RunMigrations(ctx, app.configurator, fromVM)
 	})
 
+	// v2.3.0: Founder vesting — convert the founder allocation (a plain
+	// BaseAccount) into a PeriodicVestingAccount in-place (same address).
+	// Schedule: 1-year cliff at which 1/3 unlocks, then the remaining 2/3
+	// vests linearly across 24 monthly periods — fully vested at exactly 3 years.
+	app.UpgradeKeeper.SetUpgradeHandler("v2.3.0",
+		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			logger.Info("applying v2.3.0 upgrade: founder vesting (1yr cliff, 1/3 unlock, then 24 monthly periods = 3yr total)")
+
+			founderAddr, err := sdk.AccAddressFromBech32("syreen1rrj8dx99djxkjx4rlfy2xryca9g7fujjjfclvz")
+			if err != nil {
+				return nil, err
+			}
+
+			acct := app.AccountKeeper.GetAccount(sdkCtx, founderAddr)
+			if acct == nil {
+				logger.Info("founder account not found, skipping vesting conversion")
+				return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+			}
+
+			baseAcct, ok := acct.(*authtypes.BaseAccount)
+			if !ok {
+				logger.Info("founder account is not a plain BaseAccount, skipping vesting conversion", "type", fmt.Sprintf("%T", acct))
+				return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+			}
+
+			now := sdkCtx.BlockTime()
+			founderBalance := app.BankKeeper.GetBalance(sdkCtx, founderAddr, "usyreen")
+			totalVesting := founderBalance.Amount
+			if !totalVesting.IsPositive() {
+				logger.Info("founder balance not positive, skipping vesting conversion")
+				return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+			}
+
+			const (
+				yearSeconds  = int64(365 * 24 * 3600) // 31,536,000 = 1yr cliff
+				monthSeconds = int64(2_628_000)       // 24 of these == exactly 2 years (730 days)
+				numMonths    = 24
+			)
+
+			// 1/3 unlocks at the 1-year cliff; remaining 2/3 vests over 24 months.
+			cliffAmount := totalVesting.Quo(math.NewInt(3))
+			linearTotal := totalVesting.Sub(cliffAmount)
+			monthlyAmount := linearTotal.Quo(math.NewInt(numMonths))
+			remainder := linearTotal.Sub(monthlyAmount.Mul(math.NewInt(numMonths)))
+
+			periods := make([]vestingtypes.Period, 0, numMonths+1)
+			// Cliff period: nothing vests for a full year, then 1/3 unlocks.
+			periods = append(periods, vestingtypes.Period{
+				Length: yearSeconds,
+				Amount: sdk.NewCoins(sdk.NewCoin("usyreen", cliffAmount)),
+			})
+			// 24 monthly periods for the remaining 2/3 (dust added to the last).
+			for i := 0; i < numMonths; i++ {
+				amt := monthlyAmount
+				if i == numMonths-1 {
+					amt = amt.Add(remainder)
+				}
+				periods = append(periods, vestingtypes.Period{
+					Length: monthSeconds,
+					Amount: sdk.NewCoins(sdk.NewCoin("usyreen", amt)),
+				})
+			}
+
+			vestingAcct, err := vestingtypes.NewPeriodicVestingAccount(
+				baseAcct,
+				sdk.NewCoins(sdk.NewCoin("usyreen", totalVesting)),
+				now.Unix(),
+				periods,
+			)
+			if err != nil {
+				return nil, err
+			}
+			app.AccountKeeper.SetAccount(sdkCtx, vestingAcct)
+
+			logger.Info("founder vesting account created",
+				"address", founderAddr.String(),
+				"total_vesting", totalVesting.String(),
+				"cliff_unlock", cliffAmount.String(),
+				"cliff_at", now.Add(time.Duration(yearSeconds)*time.Second).String(),
+				"fully_vested_at", now.Add(time.Duration(yearSeconds+monthSeconds*numMonths)*time.Second).String(),
+			)
+
+			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
+
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
 			// If latest version is corrupt (e.g. mid-commit crash), try
@@ -1302,6 +1389,11 @@ func (app *SyreenApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.API
 	authtx.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
 	ModuleBasics.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
 	nodeservice.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
+	// Register the CometBFT (tendermint) service REST gateway so /cosmos/base/tendermint/...
+	// endpoints (blocks/latest, blocks/{height}, validatorsets/latest) work. These read from
+	// the CometBFT blockstore, NOT the IAVL versioned store the custom proxy works around,
+	// so they function correctly. Needed for block-explorer block lists.
+	cmtservice.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
 
 	// Register custom direct-state query endpoints that bypass the broken
 	// CacheMultiStoreWithVersion in SDK v0.50.x IAVL store integration.

@@ -692,6 +692,17 @@ func (k Keeper) matchRemainingAgainstAMM(ctx context.Context, pool types.Pool) {
 			// Record trade
 			k.recordTrade(ctx, pool.ID, ammPrice, actualFillQty, bid.Creator, "AMM", bid.ID, 0, types.OrderSideBuy, "amm", blockHeight, blockTime)
 
+			// BUY-FIX: refund price-improvement escrow on the filled portion.
+			// The order escrowed bid.Price per unit but the AMM fill only spent
+			// actualTokenIn (at the lower ammPrice). Release the difference so it
+			// isn't stranded when the order is later removed from the book. Mirrors
+			// the (escrow - payment) accounting in executeMatch. The unfilled
+			// portion keeps its escrow, so partial fills are not over-refunded.
+			escrowForFill := bid.Price.MulInt(actualFillQty).Ceil().TruncateInt()
+			if priceImprovement := escrowForFill.Sub(actualTokenIn.Amount); priceImprovement.IsPositive() {
+				_ = k.refundEscrow(ctx, creatorAddr, sdk.NewCoin(pool.DenomB, priceImprovement))
+			}
+
 			// Update order
 			bid.FilledQty = bid.FilledQty.Add(actualFillQty)
 			bid.LastUpdatedAt = blockHeight
@@ -739,8 +750,13 @@ func (k Keeper) matchRemainingAgainstAMM(ctx context.Context, pool types.Pool) {
 			// C1-FIX: Cap sell amount to stay within per-block limit
 			sellAmount := remaining
 			budgetLeft := maxDenomAConsumed.Sub(totalDenomAConsumed)
+			budgetCapped := false
 			if sellAmount.GT(budgetLeft) {
 				sellAmount = budgetLeft
+				budgetCapped = true
+			}
+			if sellAmount.IsZero() {
+				break
 			}
 			tokenIn := sdk.NewCoin(pool.DenomA, sellAmount)
 			quote, _, qErr := k.GetQuote(ctx, pool.ID, tokenIn)
@@ -764,11 +780,14 @@ func (k Keeper) matchRemainingAgainstAMM(ctx context.Context, pool types.Pool) {
 				continue
 			}
 
-			// Record trade
-			k.recordTrade(ctx, pool.ID, ammPrice, remaining, ask.Creator, "AMM", ask.ID, 0, types.OrderSideSell, "amm", blockHeight, blockTime)
+			// SELL-FIX: record and advance FilledQty by the ACTUAL amount swapped
+			// (sellAmount), not the uncapped remaining. Using remaining here would
+			// strand (remaining - sellAmount) of the seller's DenomA escrow and
+			// could push FilledQty above Quantity when the budget cap fires.
+			k.recordTrade(ctx, pool.ID, ammPrice, sellAmount, ask.Creator, "AMM", ask.ID, 0, types.OrderSideSell, "amm", blockHeight, blockTime)
 
-			// Update order
-			ask.FilledQty = ask.FilledQty.Add(remaining)
+			// Update order by the actual amount filled
+			ask.FilledQty = ask.FilledQty.Add(sellAmount)
 			ask.LastUpdatedAt = blockHeight
 			if ask.IsFilled() {
 				ask.Status = types.OrderStatusFilled
@@ -786,6 +805,12 @@ func (k Keeper) matchRemainingAgainstAMM(ctx context.Context, pool types.Pool) {
 				return
 			}
 			pool = refreshed
+
+			// C1-FIX: per-block budget exhausted — stop filling rather than
+			// leaving the remainder marked as anything but genuinely filled.
+			if budgetCapped {
+				break
+			}
 		}
 	}
 }

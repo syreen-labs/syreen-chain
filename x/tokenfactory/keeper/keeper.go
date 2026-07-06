@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"cosmossdk.io/core/store"
@@ -247,22 +248,30 @@ func (k Keeper) SetParams(ctx context.Context, params types.Params) error {
 	return store.Set([]byte("params"), bz)
 }
 
-// GetDenomsFromCreator returns all denoms created by a specific creator
+// GetDenomsFromCreator returns all denoms created by a specific creator.
+// Denoms are stored one-per-key under a creator prefix; we iterate that prefix
+// and sort the results for deterministic ordering.
 func (k Keeper) GetDenomsFromCreator(ctx context.Context, creator string) []string {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := store.Get(types.CreatorDenomsKey(creator))
-	if err != nil || bz == nil {
+	prefix := types.CreatorDenomsPrefix(creator)
+	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
 		return nil
 	}
+	defer iter.Close()
+
 	var denoms []string
-	json.Unmarshal(bz, &denoms)
+	for ; iter.Valid(); iter.Next() {
+		key := iter.Key()
+		denoms = append(denoms, string(key[len(prefix):]))
+	}
+	sort.Strings(denoms)
 	return denoms
 }
 
+// addDenomByCreator indexes a single denom under its creator in O(1) by writing
+// a dedicated key rather than rewriting the creator's whole denom slice.
 func (k Keeper) addDenomByCreator(ctx context.Context, creator, denom string) {
-	denoms := k.GetDenomsFromCreator(ctx, creator)
-	denoms = append(denoms, denom)
 	store := k.storeService.OpenKVStore(ctx)
-	bz, _ := json.Marshal(denoms)
-	store.Set(types.CreatorDenomsKey(creator), bz)
+	store.Set(types.CreatorDenomIndexKey(creator, denom), []byte{1})
 }

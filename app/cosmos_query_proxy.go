@@ -539,7 +539,7 @@ func (app *SyreenApp) RegisterStandardCosmosRoutes(router *mux.Router) {
 					"block": "11",
 					"app":   "0",
 				},
-				"network": "syreen-1",
+				"network": app.ChainID(),
 				"version": "0.38.12",
 				"moniker": "syreen-validator",
 				"other": map[string]string{
