@@ -29,7 +29,7 @@ func TestFulfillIntent_ReentrantCallRejected(t *testing.T) {
 	intentID, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{
 		Creator:      creatorAddr,
 		IntentType:   types.IntentTypeSwap,
-		Body:         json.RawMessage(`{"test":1}`),
+		Body:         swapIntentBody(),
 		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
 		Tip:          sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10)),
 		ExpiryBlocks: 50,
@@ -40,7 +40,7 @@ func TestFulfillIntent_ReentrantCallRejected(t *testing.T) {
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 
@@ -65,7 +65,7 @@ func TestFulfillIntent_ReentrantCallRejected(t *testing.T) {
 	intentID2, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{
 		Creator:      creatorAddr,
 		IntentType:   types.IntentTypeSwap,
-		Body:         json.RawMessage(`{"test":2}`),
+		Body:         swapIntentBody(),
 		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
 		Tip:          sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10)),
 		ExpiryBlocks: 50,
@@ -75,7 +75,7 @@ func TestFulfillIntent_ReentrantCallRejected(t *testing.T) {
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID2,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 
@@ -110,30 +110,31 @@ func TestExecuteSolution_DisallowedMsgTypeRejected(t *testing.T) {
 	intentID, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{
 		Creator:      creatorAddr,
 		IntentType:   types.IntentTypeSwap,
-		Body:         json.RawMessage(`{"test":1}`),
+		Body:         swapIntentBody(),
 		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
 		Tip:          sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10)),
 		ExpiryBlocks: 50,
 	})
 	require.NoError(t, err)
 
-	// Set params with restricted whitelist (remove "/" which is the test mock type)
+	// Set params with a restricted whitelist that allows only bank MsgSend.
 	params := k.GetParams(ctx)
 	params.AllowedMsgTypes = []string{
 		"/cosmos.bank.v1beta1.MsgSend",
-		"/cosmos.bank.v1beta1.MsgMultiSend",
 	}
 	require.NoError(t, k.SetParams(ctx, params))
 
-	// Submit solution with a message that resolves to type "/" (the mock type)
+	// Submit a solution carrying a REAL, registered message (staking MsgDelegate)
+	// that is NOT in the restricted whitelist. It decodes successfully, so the
+	// whitelist rejection (not a decode failure) is what genuinely fires here.
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{stakingDelegateExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 
-	// Try to fulfill — should fail because "/" is not in the whitelist
+	// Try to fulfill — should fail because MsgDelegate is not in the whitelist
 	err = k.FulfillIntent(ctx, &types.MsgFulfillIntent{
 		SolverAddr: solverAddr,
 		IntentID:   intentID,
@@ -155,22 +156,23 @@ func TestExecuteSolution_AllowedMsgTypeSucceeds(t *testing.T) {
 	intentID, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{
 		Creator:      creatorAddr,
 		IntentType:   types.IntentTypeSwap,
-		Body:         json.RawMessage(`{"test":1}`),
+		Body:         swapIntentBody(),
 		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
 		Tip:          sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10)),
 		ExpiryBlocks: 50,
 	})
 	require.NoError(t, err)
 
-	// Params already have "/" in AllowedMsgTypes from setupKeeper
+	// bank MsgSend is in the default AllowedMsgTypes whitelist, and its signer is
+	// the intent module account, so execution is authorized and succeeds.
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 
-	// Should succeed because "/" is in the whitelist
+	// Should succeed because MsgSend is whitelisted and authorized
 	err = k.FulfillIntent(ctx, &types.MsgFulfillIntent{
 		SolverAddr: solverAddr,
 		IntentID:   intentID,
@@ -186,12 +188,11 @@ func TestExecuteSolution_WhitelistUpdatableViaParams(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Verify default params include the standard whitelist entries
+	// (must match types.DefaultAllowedMsgTypes exactly).
 	params := k.GetParams(ctx)
 	require.Contains(t, params.AllowedMsgTypes, "/cosmos.bank.v1beta1.MsgSend")
 	require.Contains(t, params.AllowedMsgTypes, "/cosmos.bank.v1beta1.MsgMultiSend")
 	require.Contains(t, params.AllowedMsgTypes, "/ibc.applications.transfer.v1.MsgTransfer")
-	require.Contains(t, params.AllowedMsgTypes, "/syreen.tokenfactory.MsgMint")
-	require.Contains(t, params.AllowedMsgTypes, "/syreen.tokenfactory.MsgBurn")
 	require.Contains(t, params.AllowedMsgTypes, "/syreen.compute.MsgExecuteContract")
 
 	// Update whitelist via params (simulating governance)

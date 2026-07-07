@@ -123,6 +123,21 @@ func (k Keeper) SubmitIntent(ctx context.Context, msg *types.MsgSubmitIntent) (s
 		return "", fmt.Errorf("rate limit exceeded: maximum %d intents per user per block", MaxIntentsPerUserPerBlock)
 	}
 
+	// Defense in depth: a swap intent's body must be parseable, and if it does
+	// specify a min_output_amount that floor must not be negative. A nil floor
+	// (omitted) is allowed and treated as zero downstream. verifySwapOutcome
+	// normalizes nil safely, but rejecting a negative floor and unparseable
+	// bodies up front keeps obviously-malformed swap intents out of state.
+	if msg.IntentType == types.IntentTypeSwap {
+		var swapBody types.SwapIntent
+		if err := json.Unmarshal(msg.Body, &swapBody); err != nil {
+			return "", fmt.Errorf("invalid swap intent body: %w", err)
+		}
+		if !swapBody.MinOutputAmount.IsNil() && swapBody.MinOutputAmount.IsNegative() {
+			return "", fmt.Errorf("swap intent min_output_amount must not be negative")
+		}
+	}
+
 	// Generate intent ID
 	intentID := k.nextIntentID(ctx)
 
@@ -1159,6 +1174,14 @@ func (k *Keeper) verifySwapOutcome(ctx context.Context, intent types.Intent, sol
 	if err := json.Unmarshal(intent.Body, &swapBody); err != nil {
 		// If we can't parse the body, skip verification (non-swap format)
 		return nil
+	}
+
+	// MinOutputAmount can be nil if the swap body omitted it. A nil math.Int
+	// wraps a nil big.Int, so any comparison (.GT/.LT) or String() below would
+	// panic — and this runs inside AutoFulfillIntents in BeginBlock, so a panic
+	// would HALT THE CHAIN. Normalize nil to zero ("no minimum floor").
+	if swapBody.MinOutputAmount.IsNil() {
+		swapBody.MinOutputAmount = math.ZeroInt()
 	}
 
 	// Check the creator's balance of the output denom

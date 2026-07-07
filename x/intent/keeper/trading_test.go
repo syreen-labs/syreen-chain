@@ -372,6 +372,9 @@ func TestDCA_ExecutesOnSchedule(t *testing.T) {
 		NextExecBlock:  10, // execute at block 10
 	}
 
+	// tryDCA fetches the spot price for per-tranche slippage protection; without a
+	// configured price GetSpotPrice errors and the swap is skipped.
+	dex.SetSpotPrice(1, "usyreen", "uusdc", math.LegacyNewDec(1))
 	dex.swapOut = sdk.NewCoin("uusdc", math.NewInt(900000))
 
 	intent := types.Intent{
@@ -422,6 +425,8 @@ func TestDCA_CompletesAndFulfills(t *testing.T) {
 		NextExecBlock:  10,
 	}
 
+	// Configure spot price so tryDCA's slippage-protection price fetch succeeds.
+	dex.SetSpotPrice(1, "usyreen", "uusdc", math.LegacyNewDec(1))
 	dex.swapOut = sdk.NewCoin("uusdc", math.NewInt(900000))
 
 	intent := types.Intent{
@@ -592,6 +597,8 @@ func TestTWAP_UsesDAMechanics(t *testing.T) {
 		NextExecBlock:  10,
 	}
 
+	// Configure spot price so tryDCA's slippage-protection price fetch succeeds.
+	dex.SetSpotPrice(1, "usyreen", "uusdc", math.LegacyNewDec(1))
 	dex.swapOut = sdk.NewCoin("uusdc", math.NewInt(900000))
 
 	intent := types.Intent{

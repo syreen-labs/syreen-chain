@@ -124,7 +124,7 @@ func TestFulfillIntent_AutoSelect_EmptySolverAddr(t *testing.T) {
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 
@@ -264,7 +264,7 @@ func TestAutoFulfillIntents_FulfillsAfterSolvingWindow(t *testing.T) {
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 

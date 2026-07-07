@@ -86,12 +86,11 @@ func TestMsgSubmitIntent_ZeroExpiryBlocks(t *testing.T) {
 	require.Contains(t, err.Error(), "expiry blocks must be greater than 0")
 }
 
-func TestMsgSubmitIntent_GetSigners(t *testing.T) {
-	msg := validMsgSubmitIntent()
-	signers := msg.GetSigners()
-	require.Len(t, signers, 1)
-	require.Equal(t, validAddr1, signers[0].String())
-}
+// Note: message signer resolution is no longer done via a GetSigners() method
+// (removed in Cosmos SDK v0.53). Signers are resolved through the protobuf
+// signing context registered in app/encoding.go (DefineCustomGetSigners) and
+// are exercised end-to-end. The former per-message GetSigners unit tests were
+// removed here because the method they asserted no longer exists.
 
 // ===================== MsgRegisterSolver =====================
 
@@ -140,13 +139,6 @@ func TestMsgRegisterSolver_NegativeStake(t *testing.T) {
 	require.Contains(t, err.Error(), "stake amount must be positive")
 }
 
-func TestMsgRegisterSolver_GetSigners(t *testing.T) {
-	msg := validMsgRegisterSolver()
-	signers := msg.GetSigners()
-	require.Len(t, signers, 1)
-	require.Equal(t, validAddr1, signers[0].String())
-}
-
 // ===================== MsgDeregisterSolver =====================
 
 func TestMsgDeregisterSolver_Valid(t *testing.T) {
@@ -159,12 +151,6 @@ func TestMsgDeregisterSolver_InvalidAddress(t *testing.T) {
 	err := msg.ValidateBasic()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid solver address")
-}
-
-func TestMsgDeregisterSolver_GetSigners(t *testing.T) {
-	msg := &types.MsgDeregisterSolver{Address: validAddr1}
-	signers := msg.GetSigners()
-	require.Len(t, signers, 1)
 }
 
 // ===================== MsgSubmitSolution =====================
@@ -207,13 +193,6 @@ func TestMsgSubmitSolution_EmptyExecutionMsgs(t *testing.T) {
 	require.Contains(t, err.Error(), "execution messages cannot be empty")
 }
 
-func TestMsgSubmitSolution_GetSigners(t *testing.T) {
-	msg := validMsgSubmitSolution()
-	signers := msg.GetSigners()
-	require.Len(t, signers, 1)
-	require.Equal(t, validAddr1, signers[0].String())
-}
-
 // ===================== MsgFulfillIntent =====================
 
 func TestMsgFulfillIntent_Valid(t *testing.T) {
@@ -233,12 +212,6 @@ func TestMsgFulfillIntent_EmptyIntentID(t *testing.T) {
 	err := msg.ValidateBasic()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "intent ID cannot be empty")
-}
-
-func TestMsgFulfillIntent_GetSigners(t *testing.T) {
-	msg := &types.MsgFulfillIntent{SolverAddr: validAddr1, IntentID: "1"}
-	signers := msg.GetSigners()
-	require.Len(t, signers, 1)
 }
 
 // ===================== Params =====================

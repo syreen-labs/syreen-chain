@@ -18,11 +18,57 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	bank "github.com/cosmos/cosmos-sdk/x/bank"
+	staking "github.com/cosmos/cosmos-sdk/x/staking"
 	"github.com/stretchr/testify/require"
 
 	"syreen/x/intent/keeper"
 	"syreen/x/intent/types"
 )
+
+// newTestCodec builds a codec whose interface registry has the std, bank, and
+// staking interfaces/messages registered, and an address codec configured, so
+// that real sdk.Msgs (e.g. bank MsgSend) can be decoded from protojson via
+// UnmarshalInterfaceJSON and have their signers resolved via GetMsgV1Signers.
+// A bare codec.NewProtoCodec(codectypes.NewInterfaceRegistry()) has nothing
+// registered and a failing address codec, so executeSolutionMsgs can neither
+// decode nor authorize any real execution message with it.
+func newTestCodec() codec.Codec {
+	return moduletestutil.MakeTestEncodingConfig(bank.AppModuleBasic{}, staking.AppModuleBasic{}).Codec
+}
+
+// bankSendExecMsg returns a real, registered, signer-resolvable execution
+// message: a bank MsgSend whose signer (from_address) is the intent module
+// account, which executeSolutionMsgs authorizes. The mock msg router stubs the
+// handler, so the send itself is a no-op (no funding required); the message only
+// needs to decode and resolve an authorized signer.
+func bankSendExecMsg() json.RawMessage {
+	moduleAddr := authtypes.NewModuleAddress(types.ModuleName).String()
+	return json.RawMessage(fmt.Sprintf(
+		`{"@type":"/cosmos.bank.v1beta1.MsgSend","from_address":"%s","to_address":"%s","amount":[{"denom":"usyreen","amount":"1"}]}`,
+		moduleAddr, creatorAddr))
+}
+
+// swapIntentBody returns a well-formed SwapIntent body. Swap intents run through
+// verifySwapOutcome on fulfillment, which requires min_output_amount to be a real
+// (non-nil) value; the old placeholder body `{"test":1}` left it nil and caused a
+// nil-pointer panic in the outcome check. MinOutputAmount is zero here so the
+// mock bank's flat balance satisfies the "delivered >= required" check.
+func swapIntentBody() json.RawMessage {
+	return json.RawMessage(`{"input_denom":"usyreen","input_amount":"1000","output_denom":"uusdc","min_output_amount":"0","max_slippage":"0"}`)
+}
+
+// stakingDelegateExecMsg returns a real, registered staking MsgDelegate. It is
+// used to exercise the whitelist rejection path: the message decodes fine (so we
+// are past the decode step) but is NOT in the restricted whitelist, so it must be
+// rejected with ErrDisallowedMsgType.
+func stakingDelegateExecMsg() json.RawMessage {
+	return json.RawMessage(fmt.Sprintf(
+		`{"@type":"/cosmos.staking.v1beta1.MsgDelegate","delegator_address":"%s","validator_address":"%s","amount":{"denom":"usyreen","amount":"1"}}`,
+		creatorAddr, solverAddr))
+}
 
 // ---------- Valid test addresses ----------
 
@@ -117,7 +163,7 @@ func setupKeeperWithBankErr(t *testing.T, bankErr error) (*keeper.Keeper, sdk.Co
 	require.NoError(t, stateStore.LoadLatestVersion())
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 1}, false, log.NewNopLogger())
-	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
+	cdc := newTestCodec()
 	storeService := runtime.NewKVStoreService(storeKey)
 
 	// Mock msg router that succeeds by default
@@ -145,7 +191,7 @@ func setupKeeperWithTrackingBank(t *testing.T) (*keeper.Keeper, sdk.Context, *tr
 	require.NoError(t, stateStore.LoadLatestVersion())
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 1}, false, log.NewNopLogger())
-	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
+	cdc := newTestCodec()
 	storeService := runtime.NewKVStoreService(storeKey)
 
 	router := &mockMsgRouter{
@@ -483,7 +529,7 @@ func registerSolverAndIntent(t *testing.T, k *keeper.Keeper, ctx sdk.Context) st
 	id, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{
 		Creator:      creatorAddr,
 		IntentType:   types.IntentTypeSwap,
-		Body:         json.RawMessage(`{"test":1}`),
+		Body:         swapIntentBody(),
 		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
 		Tip:          sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10)),
 		ExpiryBlocks: 50,
@@ -674,6 +720,59 @@ func TestSubmitSolution_SolvingWindowClosed(t *testing.T) {
 
 // ===================== FulfillIntent =====================
 
+// A swap intent whose body OMITS min_output_amount leaves MinOutputAmount nil.
+// verifySwapOutcome runs inside AutoFulfillIntents (BeginBlock), so a nil-Int
+// comparison there (big.Int.Cmp(nil)) would panic and HALT THE CHAIN. This
+// guards that the nil floor is normalized and fulfillment succeeds without panic.
+func TestFulfillIntent_SwapBodyMissingMinOutput_NoPanic(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	require.NoError(t, k.RegisterSolver(ctx, &types.MsgRegisterSolver{
+		Address:     solverAddr,
+		Moniker:     "solver",
+		StakeAmount: sdk.NewCoin("usyreen", math.NewInt(2000000000)),
+	}))
+	// Body has denoms but NO min_output_amount → MinOutputAmount stays nil.
+	id, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{
+		Creator:      creatorAddr,
+		IntentType:   types.IntentTypeSwap,
+		Body:         json.RawMessage(`{"input_denom":"usyreen","output_denom":"uusdc"}`),
+		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		Tip:          sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10)),
+		ExpiryBlocks: 50,
+	})
+	require.NoError(t, err, "nil min_output_amount is allowed (treated as zero floor)")
+
+	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
+		SolverAddr:      solverAddr,
+		IntentID:        id,
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
+		ExpectedOutcome: json.RawMessage(`{}`),
+	}))
+
+	// Must NOT panic despite the nil floor.
+	require.NotPanics(t, func() {
+		err = k.FulfillIntent(ctx, &types.MsgFulfillIntent{SolverAddr: solverAddr, IntentID: id})
+	})
+	require.NoError(t, err)
+	intent, found := k.GetIntent(ctx, id)
+	require.True(t, found)
+	require.Equal(t, types.StatusFulfilled, intent.Status)
+}
+
+// A swap intent that explicitly declares a NEGATIVE floor is rejected at submit.
+func TestSubmitIntent_SwapNegativeMinOutput_Rejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	_, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{
+		Creator:      creatorAddr,
+		IntentType:   types.IntentTypeSwap,
+		Body:         json.RawMessage(`{"input_denom":"usyreen","output_denom":"uusdc","min_output_amount":"-5"}`),
+		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		ExpiryBlocks: 50,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be negative")
+}
+
 func TestFulfillIntent_Success(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	intentID := registerSolverAndIntent(t, k, ctx)
@@ -682,7 +781,7 @@ func TestFulfillIntent_Success(t *testing.T) {
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 
@@ -724,7 +823,7 @@ func TestFulfillIntent_AlreadyFulfilled(t *testing.T) {
 	require.NoError(t, k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
 		IntentID:        intentID,
-		ExecutionMsgs:   []json.RawMessage{json.RawMessage(`{"@type":"/test"}`)},
+		ExecutionMsgs:   []json.RawMessage{bankSendExecMsg()},
 		ExpectedOutcome: json.RawMessage(`{}`),
 	}))
 
