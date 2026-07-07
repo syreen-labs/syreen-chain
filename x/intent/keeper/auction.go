@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -73,6 +74,50 @@ func (k Keeper) SelectWinningSolver(ctx context.Context, intentID string) (*type
 	// Single active solver after filtering
 	if len(metrics) == 1 {
 		return metrics[0].solution, nil
+	}
+
+	// ── Fairness Engine · best execution ────────────────────────────────────
+	// For SWAP intents, the winner is the solver who delivers the most output to
+	// the USER, not the one with the best reputation/tip. Solvers declare their
+	// output in ExpectedOutcome and are bound to it at settlement (a winner who
+	// under-delivers fails verification and is slashed), so the auction can't be
+	// gamed by over-declaring. Reputation and stake are deterministic tiebreakers.
+	// Non-declaring (or below-floor) solvers are treated as offering exactly the
+	// intent's MinOutputAmount. Non-swap intents fall through to the multi-factor
+	// score below.
+	if intent, found := k.GetIntent(ctx, intentID); found && intent.IntentType == types.IntentTypeSwap {
+		var swapBody types.SwapIntent
+		if err := json.Unmarshal(intent.Body, &swapBody); err == nil && !swapBody.MinOutputAmount.IsNil() {
+			floor := sdkmath.LegacyNewDecFromBigInt(swapBody.MinOutputAmount.BigInt())
+			type bestExec struct {
+				m      *rawMetrics
+				output sdkmath.LegacyDec
+			}
+			ranked := make([]bestExec, 0, len(metrics))
+			for i := range metrics {
+				out := floor
+				if declared, ok := metrics[i].solution.DeclaredOutput(); ok {
+					d := sdkmath.LegacyNewDecFromBigInt(declared.BigInt())
+					if d.GT(out) {
+						out = d
+					}
+				}
+				ranked = append(ranked, bestExec{m: &metrics[i], output: out})
+			}
+			sort.SliceStable(ranked, func(i, j int) bool {
+				if !ranked[i].output.Equal(ranked[j].output) {
+					return ranked[i].output.GT(ranked[j].output) // most output to the user wins
+				}
+				if !ranked[i].m.reputation.Equal(ranked[j].m.reputation) {
+					return ranked[i].m.reputation.GT(ranked[j].m.reputation)
+				}
+				if !ranked[i].m.stake.Equal(ranked[j].m.stake) {
+					return ranked[i].m.stake.GT(ranked[j].m.stake)
+				}
+				return ranked[i].m.solution.SolverAddr < ranked[j].m.solution.SolverAddr
+			})
+			return ranked[0].m.solution, nil
+		}
 	}
 
 	// Find min/max for each metric to normalize to 0-100 scale

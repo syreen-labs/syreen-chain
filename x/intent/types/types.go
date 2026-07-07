@@ -224,6 +224,32 @@ type Solution struct {
 	SubmittedAt     int64             `json:"submitted_at"`
 }
 
+// SolutionOutcome is the solver's declared execution result, carried in
+// Solution.ExpectedOutcome. For swap intents, OutputAmount is the amount of the
+// intent's OutputDenom the solver commits to deliver to the creator.
+//
+// Fairness Engine (best execution): the auction ranks solvers by this declared
+// output — highest wins — and the winner is HELD to it at settlement
+// (verifySwapOutcome requires delivered >= declared). So over-declaring to win
+// the auction fails and slashes the solver; competition drives the surplus to
+// the user instead of the solver.
+type SolutionOutcome struct {
+	OutputAmount math.Int `json:"output_amount"`
+}
+
+// DeclaredOutput returns the output amount the solver committed to in
+// ExpectedOutcome, and whether a valid, positive amount was declared.
+func (m *Solution) DeclaredOutput() (math.Int, bool) {
+	if len(m.ExpectedOutcome) == 0 {
+		return math.ZeroInt(), false
+	}
+	var o SolutionOutcome
+	if err := json.Unmarshal(m.ExpectedOutcome, &o); err != nil || o.OutputAmount.IsNil() || !o.OutputAmount.IsPositive() {
+		return math.ZeroInt(), false
+	}
+	return o.OutputAmount, true
+}
+
 func (m *Solution) ProtoMessage()           {}
 func (m *Solution) Reset()                  { *m = Solution{} }
 func (m *Solution) String() string          { return fmt.Sprintf("solution: intent=%s solver=%s gas=%d", m.IntentID, m.SolverAddr, m.GasEstimate) }

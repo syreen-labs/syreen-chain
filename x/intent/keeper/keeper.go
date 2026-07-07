@@ -516,7 +516,11 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 	// Outcome verification: for swap intents, verify the creator's balance changed
 	// in the expected direction. If not, mark intent as failed and slash the solver.
 	if intent.IntentType == types.IntentTypeSwap {
-		if verifyErr := k.verifySwapOutcome(ctx, intent, solverAddrStr, params, swapOutputBefore); verifyErr != nil {
+		// Bind the winning solver to the output it declared in the auction (best
+		// execution). declaredOutput is zero if the solver made no declaration, in
+		// which case verifySwapOutcome falls back to the intent's MinOutputAmount.
+		declaredOutput, _ := winningSolution.DeclaredOutput()
+		if verifyErr := k.verifySwapOutcome(ctx, intent, solverAddrStr, params, swapOutputBefore, declaredOutput); verifyErr != nil {
 			k.Logger(ctx).Error("outcome verification failed",
 				"intent_id", msg.IntentID, "solver", solverAddrStr, "error", verifyErr)
 			// Mark as failed, slash solver
@@ -1152,7 +1156,7 @@ func (k *Keeper) swapOutputBalanceBefore(ctx context.Context, intent types.Inten
 // submitting solutions that appear to succeed but don't actually deliver the
 // expected tokens, including the case where the creator already held >=
 // MinOutputAmount before the solution ran.
-func (k *Keeper) verifySwapOutcome(ctx context.Context, intent types.Intent, solverAddr string, params types.Params, beforeBalance math.Int) error {
+func (k *Keeper) verifySwapOutcome(ctx context.Context, intent types.Intent, solverAddr string, params types.Params, beforeBalance math.Int, declaredOutput math.Int) error {
 	var swapBody types.SwapIntent
 	if err := json.Unmarshal(intent.Body, &swapBody); err != nil {
 		// If we can't parse the body, skip verification (non-swap format)
@@ -1167,11 +1171,21 @@ func (k *Keeper) verifySwapOutcome(ctx context.Context, intent types.Intent, sol
 
 	afterBalance := k.bankKeeper.GetBalance(ctx, creatorAddr, swapBody.OutputDenom).Amount
 
-	// The creator should have received at least MinOutputAmount as a delta.
+	// Fairness Engine · best execution: the creator must receive at least the
+	// intent's MinOutputAmount AND at least what the winning solver DECLARED in
+	// the auction. Binding the solver to their declaration is what stops them
+	// winning the best-execution auction by over-promising and delivering only
+	// the floor — under-delivery fails here and slashes the solver.
+	required := swapBody.MinOutputAmount
+	if !declaredOutput.IsNil() && declaredOutput.GT(required) {
+		required = declaredOutput
+	}
+
+	// The creator should have received at least `required` as a delta.
 	delta := afterBalance.Sub(beforeBalance)
-	if delta.LT(swapBody.MinOutputAmount) {
-		return fmt.Errorf("creator received %s %s, less than min expected %s",
-			delta, swapBody.OutputDenom, swapBody.MinOutputAmount)
+	if delta.LT(required) {
+		return fmt.Errorf("creator received %s %s, less than required %s (min %s, solver promised %s)",
+			delta, swapBody.OutputDenom, required, swapBody.MinOutputAmount, declaredOutput)
 	}
 
 	return nil
