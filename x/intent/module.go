@@ -126,9 +126,13 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 		_ = am.keeper.SetParams(ctx, p)
 	}
 
-	am.keeper.ExpireIntents(ctx)
+	// Run the solver auction (AutoFulfillIntents) BEFORE the hard-expiry sweep.
+	// If ExpireIntents ran first, an intent whose hard expiry lands on the same
+	// block as its solving-window deadline would be expired — and its solutions
+	// deleted — before the auction ever gets to select a winner.
 	am.keeper.CompleteSolverUnbonding(ctx)
 	am.keeper.AutoFulfillIntents(ctx)
+	am.keeper.ExpireIntents(ctx)
 	am.keeper.ExecuteTradingIntents(ctx)
 	am.keeper.ProcessChainConditions(ctx)
 	am.keeper.SyncStrategyStatuses(ctx)

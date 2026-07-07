@@ -154,24 +154,23 @@ func CmdQuerySolutions() *cobra.Command {
 			}
 
 			intentID := args[0]
-			prefix := types.SolutionsByIntentPrefix(intentID)
 
-			res, _, err := clientCtx.QueryStore(prefix, types.StoreKey)
-			if err != nil {
+			// Route through the gRPC query service. The old implementation did an
+			// ABCI point-lookup (QueryStore) on the *prefix* solution/<id>/ and
+			// unmarshaled a single Solution — but solutions are stored one-per-solver
+			// at solution/<id>/<solverAddr>, so the point-lookup always missed and
+			// returned "[]". The gRPC Solutions handler does a proper prefix scan.
+			req := &types.QuerySolutionsRequest{IntentID: intentID}
+			resp := &types.QuerySolutionsResponse{}
+			if err := clientCtx.Invoke(cmd.Context(), "/syreen.intent.Query/Solutions", req, resp); err != nil {
 				return fmt.Errorf("failed to query solutions: %w", err)
 			}
 
-			if len(res) == 0 {
+			if len(resp.Solutions) == 0 {
 				return clientCtx.PrintBytes([]byte("[]"))
 			}
 
-			// Try to unmarshal as a single solution first
-			var solution types.Solution
-			if err := json.Unmarshal(res, &solution); err != nil {
-				return clientCtx.PrintBytes(res)
-			}
-
-			bz, _ := json.MarshalIndent(solution, "", "  ")
+			bz, _ := json.MarshalIndent(resp.Solutions, "", "  ")
 			return clientCtx.PrintBytes(bz)
 		},
 	}

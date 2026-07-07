@@ -14,7 +14,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
-	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
@@ -626,17 +625,16 @@ func (k *Keeper) executeSolutionMsgs(ctx context.Context, solution *types.Soluti
 	}
 
 	for i, rawMsg := range solution.ExecutionMsgs {
-		// Each execution msg should be a JSON-encoded sdk.Msg wrapped in Any format
-		// Expected format: {"@type": "/cosmos.bank.v1beta1.MsgSend", ...}
-		var anyMsg cdctypes.Any
-		if err := json.Unmarshal(rawMsg, &anyMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal execution msg %d: %w", i, err)
-		}
-
-		// Unpack the Any into a concrete sdk.Msg
+		// Each execution msg is a protojson-encoded sdk.Msg using the standard
+		// "@type" discriminator, e.g. {"@type":"/cosmos.bank.v1beta1.MsgSend", ...}.
+		// This MUST be decoded through the codec's interface-JSON path, which
+		// resolves "@type" against the interface registry. A plain json.Unmarshal
+		// into a codectypes.Any does NOT map "@type" (the Any field is tagged
+		// "type_url"), leaving TypeUrl empty so the message resolves to type "/"
+		// and is rejected — which silently broke ALL solution execution.
 		var sdkMsg sdk.Msg
-		if err := k.cdc.UnpackAny(&anyMsg, &sdkMsg); err != nil {
-			return fmt.Errorf("failed to unpack execution msg %d (type %s): %w", i, anyMsg.TypeUrl, err)
+		if err := k.cdc.UnmarshalInterfaceJSON(rawMsg, &sdkMsg); err != nil {
+			return fmt.Errorf("failed to decode execution msg %d: %w", i, err)
 		}
 
 		// C-11: Check message type against whitelist

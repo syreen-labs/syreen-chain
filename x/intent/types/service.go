@@ -2,9 +2,11 @@ package types
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 // Msg response types are defined in intent_proto.go (with Descriptor/Marshal/Unmarshal).
@@ -88,6 +90,59 @@ func (m *QuerySolutionsRequest) Reset()                  { *m = QuerySolutionsRe
 func (m *QuerySolutionsRequest) String() string          { return fmt.Sprintf("query_solutions: intent=%s", m.IntentID) }
 func (m *QuerySolutionsRequest) XXX_MessageName() string { return "syreen.intent.QuerySolutionsRequest" }
 
+// Marshal/Unmarshal/Size: hand-rolled proto codec so IntentID (which has no
+// protobuf struct tag) survives the wire. Without this, reflection marshaling
+// drops IntentID and the gRPC query runs against an empty intent id.
+func (m *QuerySolutionsRequest) Marshal() ([]byte, error) {
+	var b []byte
+	if m.IntentID != "" {
+		b = protowire.AppendTag(b, 1, protowire.BytesType)
+		b = protowire.AppendString(b, m.IntentID)
+	}
+	return b, nil
+}
+
+func (m *QuerySolutionsRequest) MarshalToSizedBuffer(data []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	n := len(b)
+	copy(data[len(data)-n:], b)
+	return n, nil
+}
+
+func (m *QuerySolutionsRequest) Size() int {
+	b, _ := m.Marshal()
+	return len(b)
+}
+
+func (m *QuerySolutionsRequest) Unmarshal(data []byte) error {
+	m.IntentID = ""
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeString(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.IntentID = v
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
+
 type QuerySolutionsResponse struct {
 	Solutions []Solution `json:"solutions"`
 }
@@ -96,6 +151,70 @@ func (m *QuerySolutionsResponse) ProtoMessage()           {}
 func (m *QuerySolutionsResponse) Reset()                  { *m = QuerySolutionsResponse{} }
 func (m *QuerySolutionsResponse) String() string          { return fmt.Sprintf("solutions: %d", len(m.Solutions)) }
 func (m *QuerySolutionsResponse) XXX_MessageName() string { return "syreen.intent.QuerySolutionsResponse" }
+
+// Marshal/Unmarshal/Size: hand-rolled proto codec for the response.
+// Without these, the codec falls back to reflection encoding, which cannot
+// represent Solution's []json.RawMessage fields — so the Solutions slice was
+// silently DROPPED and the query returned empty even though the server found
+// the solutions. Each Solution is encoded as a repeated length-delimited
+// bytes field (#1) holding its JSON, matching how solutions are stored.
+func (m *QuerySolutionsResponse) Marshal() ([]byte, error) {
+	var b []byte
+	for i := range m.Solutions {
+		sb, err := json.Marshal(&m.Solutions[i])
+		if err != nil {
+			return nil, err
+		}
+		b = protowire.AppendTag(b, 1, protowire.BytesType)
+		b = protowire.AppendBytes(b, sb)
+	}
+	return b, nil
+}
+
+func (m *QuerySolutionsResponse) MarshalToSizedBuffer(data []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	n := len(b)
+	copy(data[len(data)-n:], b)
+	return n, nil
+}
+
+func (m *QuerySolutionsResponse) Size() int {
+	b, _ := m.Marshal()
+	return len(b)
+}
+
+func (m *QuerySolutionsResponse) Unmarshal(data []byte) error {
+	m.Solutions = nil
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			var s Solution
+			if err := json.Unmarshal(v, &s); err != nil {
+				return err
+			}
+			m.Solutions = append(m.Solutions, s)
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
 
 // --- Intents (list all) Query ---
 

@@ -558,6 +558,7 @@ func CmdFulfillIntent() *cobra.Command {
 			}
 
 			msg := &types.MsgFulfillIntent{
+				Sender:     clientCtx.GetFromAddress().String(),
 				SolverAddr: solverAddr,
 				IntentID:   intentID,
 			}
