@@ -286,6 +286,19 @@ func (k *Keeper) tryTWAP(ctx context.Context, intent types.Intent) error {
 func (k *Keeper) executeTradingSwap(ctx context.Context, intent types.Intent, poolID uint64, inputDenom string, inputAmount, minOutput math.Int) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	moduleAddr := k.accountKeeper.GetModuleAddress(types.ModuleName)
+
+	// This runs inside ExecuteTradingIntents in BeginBlock. A trading intent body
+	// with a nil/non-positive input_amount would make sdk.NewCoin below PANIC
+	// (nil amount fails Coin.Validate) — halting the chain. Fail the intent
+	// instead of trusting the stored body.
+	if inputAmount.IsNil() || !inputAmount.IsPositive() {
+		intent.Status = types.StatusFailed
+		k.SetIntent(ctx, intent)
+		k.refundIntentFees(ctx, intent)
+		k.FailChainIfLinked(ctx, intent)
+		return fmt.Errorf("trading intent has invalid input amount")
+	}
+
 	tokenIn := sdk.NewCoin(inputDenom, inputAmount)
 
 	// Atomic swap + delivery via cache context
