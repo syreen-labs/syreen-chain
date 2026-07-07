@@ -11,6 +11,95 @@ import (
 
 // Msg response types are defined in intent_proto.go (with Descriptor/Marshal/Unmarshal).
 
+// --- Hand-rolled proto codec helpers ---
+//
+// The query request/response types below carry fields the reflection-based proto
+// codec cannot represent: plain string fields (no protobuf struct tag) and domain
+// structs/slices holding json.RawMessage (Intent.Body, Solution fields, etc.).
+// Because these types have NO protobuf tags at all, reflection marshaling emits
+// EMPTY output — so over gRPC/REST every field is silently dropped and clients see
+// blank responses (this is the same class of bug as the July QuerySolutions fix).
+// Each domain object is encoded as its JSON bytes in a length-delimited field,
+// mirroring exactly how the keeper stores them (json.Marshal). Helpers below keep
+// the per-type Marshal/Unmarshal small and uniform.
+
+// appendString (proto3 string field, omitted when empty) is defined in
+// strategy_proto.go and reused here.
+
+// appendBool appends a proto3 bool field, omitting it when false (proto3 default).
+func appendBool(b []byte, num protowire.Number, v bool) []byte {
+	if !v {
+		return b
+	}
+	b = protowire.AppendTag(b, num, protowire.VarintType)
+	return protowire.AppendVarint(b, 1)
+}
+
+// appendJSON encodes v as JSON and appends it as a length-delimited bytes field.
+func appendJSON(b []byte, num protowire.Number, v interface{}) ([]byte, error) {
+	jb, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	b = protowire.AppendTag(b, num, protowire.BytesType)
+	return protowire.AppendBytes(b, jb), nil
+}
+
+// sizedBuffer is the common MarshalToSizedBuffer body: marshal, then copy into the
+// tail of data (gogoproto's contract).
+func sizedBuffer(data []byte, marshal func() ([]byte, error)) (int, error) {
+	b, err := marshal()
+	if err != nil {
+		return 0, err
+	}
+	n := len(b)
+	copy(data[len(data)-n:], b)
+	return n, nil
+}
+
+// marshalIntentSlice / unmarshalIntentSlice encode a []Intent as repeated
+// length-delimited JSON bytes in field #1 — shared by the list-style responses.
+func marshalIntentSlice(intents []Intent) ([]byte, error) {
+	var b []byte
+	var err error
+	for i := range intents {
+		if b, err = appendJSON(b, 1, &intents[i]); err != nil {
+			return nil, err
+		}
+	}
+	return b, nil
+}
+
+func unmarshalIntentSlice(data []byte) ([]Intent, error) {
+	var out []Intent
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return nil, protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			var it Intent
+			if err := json.Unmarshal(v, &it); err != nil {
+				return nil, err
+			}
+			out = append(out, it)
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return nil, protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return out, nil
+}
+
 // --- MsgServer Interface ---
 
 type MsgServer interface {
@@ -43,6 +132,37 @@ func (m *QueryParamsResponse) Reset()                  { *m = QueryParamsRespons
 func (m *QueryParamsResponse) String() string          { return fmt.Sprintf("params: %+v", m.Params) }
 func (m *QueryParamsResponse) XXX_MessageName() string { return "syreen.intent.QueryParamsResponse" }
 
+func (m *QueryParamsResponse) Marshal() ([]byte, error)              { return appendJSON(nil, 1, &m.Params) }
+func (m *QueryParamsResponse) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryParamsResponse) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryParamsResponse) Unmarshal(data []byte) error {
+	*m = QueryParamsResponse{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			if err := json.Unmarshal(v, &m.Params); err != nil {
+				return err
+			}
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
+
 type QueryIntentRequest struct {
 	IntentID string `json:"intent_id"`
 }
@@ -51,6 +171,35 @@ func (m *QueryIntentRequest) ProtoMessage()           {}
 func (m *QueryIntentRequest) Reset()                  { *m = QueryIntentRequest{} }
 func (m *QueryIntentRequest) String() string          { return fmt.Sprintf("query_intent: id=%s", m.IntentID) }
 func (m *QueryIntentRequest) XXX_MessageName() string { return "syreen.intent.QueryIntentRequest" }
+
+func (m *QueryIntentRequest) Marshal() ([]byte, error)              { return appendString(nil, 1, m.IntentID), nil }
+func (m *QueryIntentRequest) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryIntentRequest) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryIntentRequest) Unmarshal(data []byte) error {
+	*m = QueryIntentRequest{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeString(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.IntentID = v
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
 
 type QueryIntentResponse struct {
 	Intent Intent `json:"intent"`
@@ -62,6 +211,51 @@ func (m *QueryIntentResponse) Reset()                  { *m = QueryIntentRespons
 func (m *QueryIntentResponse) String() string          { return fmt.Sprintf("intent: %+v", m.Intent) }
 func (m *QueryIntentResponse) XXX_MessageName() string { return "syreen.intent.QueryIntentResponse" }
 
+func (m *QueryIntentResponse) Marshal() ([]byte, error) {
+	b, err := appendJSON(nil, 1, &m.Intent)
+	if err != nil {
+		return nil, err
+	}
+	return appendBool(b, 2, m.Found), nil
+}
+func (m *QueryIntentResponse) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryIntentResponse) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryIntentResponse) Unmarshal(data []byte) error {
+	*m = QueryIntentResponse{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		switch {
+		case num == 1 && typ == protowire.BytesType:
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			if err := json.Unmarshal(v, &m.Intent); err != nil {
+				return err
+			}
+		case num == 2 && typ == protowire.VarintType:
+			v, vn := protowire.ConsumeVarint(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.Found = v != 0
+		default:
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
+
 type QuerySolverRequest struct {
 	Address string `json:"address"`
 }
@@ -70,6 +264,35 @@ func (m *QuerySolverRequest) ProtoMessage()           {}
 func (m *QuerySolverRequest) Reset()                  { *m = QuerySolverRequest{} }
 func (m *QuerySolverRequest) String() string          { return fmt.Sprintf("query_solver: addr=%s", m.Address) }
 func (m *QuerySolverRequest) XXX_MessageName() string { return "syreen.intent.QuerySolverRequest" }
+
+func (m *QuerySolverRequest) Marshal() ([]byte, error)              { return appendString(nil, 1, m.Address), nil }
+func (m *QuerySolverRequest) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QuerySolverRequest) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QuerySolverRequest) Unmarshal(data []byte) error {
+	*m = QuerySolverRequest{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeString(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.Address = v
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
 
 type QuerySolverResponse struct {
 	Solver Solver `json:"solver"`
@@ -80,6 +303,51 @@ func (m *QuerySolverResponse) ProtoMessage()           {}
 func (m *QuerySolverResponse) Reset()                  { *m = QuerySolverResponse{} }
 func (m *QuerySolverResponse) String() string          { return fmt.Sprintf("solver: %+v", m.Solver) }
 func (m *QuerySolverResponse) XXX_MessageName() string { return "syreen.intent.QuerySolverResponse" }
+
+func (m *QuerySolverResponse) Marshal() ([]byte, error) {
+	b, err := appendJSON(nil, 1, &m.Solver)
+	if err != nil {
+		return nil, err
+	}
+	return appendBool(b, 2, m.Found), nil
+}
+func (m *QuerySolverResponse) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QuerySolverResponse) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QuerySolverResponse) Unmarshal(data []byte) error {
+	*m = QuerySolverResponse{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		switch {
+		case num == 1 && typ == protowire.BytesType:
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			if err := json.Unmarshal(v, &m.Solver); err != nil {
+				return err
+			}
+		case num == 2 && typ == protowire.VarintType:
+			v, vn := protowire.ConsumeVarint(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.Found = v != 0
+		default:
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
 
 type QuerySolutionsRequest struct {
 	IntentID string `json:"intent_id"`
@@ -234,6 +502,18 @@ func (m *QueryIntentsResponse) Reset()                  { *m = QueryIntentsRespo
 func (m *QueryIntentsResponse) String() string          { return fmt.Sprintf("intents: %d", len(m.Intents)) }
 func (m *QueryIntentsResponse) XXX_MessageName() string { return "syreen.intent.QueryIntentsResponse" }
 
+func (m *QueryIntentsResponse) Marshal() ([]byte, error)              { return marshalIntentSlice(m.Intents) }
+func (m *QueryIntentsResponse) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryIntentsResponse) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryIntentsResponse) Unmarshal(data []byte) error {
+	out, err := unmarshalIntentSlice(data)
+	if err != nil {
+		return err
+	}
+	m.Intents = out
+	return nil
+}
+
 // --- IntentsByType Query ---
 
 type QueryIntentsByTypeRequest struct {
@@ -245,6 +525,35 @@ func (m *QueryIntentsByTypeRequest) Reset()                  { *m = QueryIntents
 func (m *QueryIntentsByTypeRequest) String() string          { return fmt.Sprintf("query_intents_by_type: type=%s", m.IntentType) }
 func (m *QueryIntentsByTypeRequest) XXX_MessageName() string { return "syreen.intent.QueryIntentsByTypeRequest" }
 
+func (m *QueryIntentsByTypeRequest) Marshal() ([]byte, error)              { return appendString(nil, 1, m.IntentType), nil }
+func (m *QueryIntentsByTypeRequest) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryIntentsByTypeRequest) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryIntentsByTypeRequest) Unmarshal(data []byte) error {
+	*m = QueryIntentsByTypeRequest{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeString(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.IntentType = v
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
+
 type QueryIntentsByTypeResponse struct {
 	Intents []Intent `json:"intents"`
 }
@@ -253,6 +562,18 @@ func (m *QueryIntentsByTypeResponse) ProtoMessage()           {}
 func (m *QueryIntentsByTypeResponse) Reset()                  { *m = QueryIntentsByTypeResponse{} }
 func (m *QueryIntentsByTypeResponse) String() string          { return fmt.Sprintf("intents_by_type: %d", len(m.Intents)) }
 func (m *QueryIntentsByTypeResponse) XXX_MessageName() string { return "syreen.intent.QueryIntentsByTypeResponse" }
+
+func (m *QueryIntentsByTypeResponse) Marshal() ([]byte, error)              { return marshalIntentSlice(m.Intents) }
+func (m *QueryIntentsByTypeResponse) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryIntentsByTypeResponse) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryIntentsByTypeResponse) Unmarshal(data []byte) error {
+	out, err := unmarshalIntentSlice(data)
+	if err != nil {
+		return err
+	}
+	m.Intents = out
+	return nil
+}
 
 // --- QueryServer Interface ---
 

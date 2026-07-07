@@ -1,11 +1,13 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 // StrategyStatus represents the lifecycle status of a deployed strategy
@@ -340,6 +342,53 @@ func (m *QueryStrategyTemplatesResponse) Reset()                  { *m = QuerySt
 func (m *QueryStrategyTemplatesResponse) String() string          { return fmt.Sprintf("templates: %d", len(m.Templates)) }
 func (m *QueryStrategyTemplatesResponse) XXX_MessageName() string { return "syreen.intent.QueryStrategyTemplatesResponse" }
 
+// Hand-rolled proto codec: without it the reflection codec drops Templates over
+// gRPC/REST (see service.go for the full rationale). Encoded as repeated JSON
+// bytes in field #1.
+func (m *QueryStrategyTemplatesResponse) Marshal() ([]byte, error) {
+	var b []byte
+	var err error
+	for i := range m.Templates {
+		if b, err = appendJSON(b, 1, &m.Templates[i]); err != nil {
+			return nil, err
+		}
+	}
+	return b, nil
+}
+func (m *QueryStrategyTemplatesResponse) MarshalToSizedBuffer(d []byte) (int, error) {
+	return sizedBuffer(d, m.Marshal)
+}
+func (m *QueryStrategyTemplatesResponse) Size() int { b, _ := m.Marshal(); return len(b) }
+func (m *QueryStrategyTemplatesResponse) Unmarshal(data []byte) error {
+	m.Templates = nil
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			var t StrategyTemplate
+			if err := json.Unmarshal(v, &t); err != nil {
+				return err
+			}
+			m.Templates = append(m.Templates, t)
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
+
 type QueryStrategiesRequest struct {
 	Address string `json:"address"`
 }
@@ -348,6 +397,35 @@ func (m *QueryStrategiesRequest) ProtoMessage()           {}
 func (m *QueryStrategiesRequest) Reset()                  { *m = QueryStrategiesRequest{} }
 func (m *QueryStrategiesRequest) String() string          { return fmt.Sprintf("query_strategies: addr=%s", m.Address) }
 func (m *QueryStrategiesRequest) XXX_MessageName() string { return "syreen.intent.QueryStrategiesRequest" }
+
+func (m *QueryStrategiesRequest) Marshal() ([]byte, error)              { return appendString(nil, 1, m.Address), nil }
+func (m *QueryStrategiesRequest) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryStrategiesRequest) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryStrategiesRequest) Unmarshal(data []byte) error {
+	*m = QueryStrategiesRequest{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeString(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.Address = v
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
 
 type QueryStrategiesResponse struct {
 	Strategies []Strategy `json:"strategies"`
@@ -358,6 +436,48 @@ func (m *QueryStrategiesResponse) Reset()                  { *m = QueryStrategie
 func (m *QueryStrategiesResponse) String() string          { return fmt.Sprintf("strategies: %d", len(m.Strategies)) }
 func (m *QueryStrategiesResponse) XXX_MessageName() string { return "syreen.intent.QueryStrategiesResponse" }
 
+func (m *QueryStrategiesResponse) Marshal() ([]byte, error) {
+	var b []byte
+	var err error
+	for i := range m.Strategies {
+		if b, err = appendJSON(b, 1, &m.Strategies[i]); err != nil {
+			return nil, err
+		}
+	}
+	return b, nil
+}
+func (m *QueryStrategiesResponse) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryStrategiesResponse) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryStrategiesResponse) Unmarshal(data []byte) error {
+	m.Strategies = nil
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			var s Strategy
+			if err := json.Unmarshal(v, &s); err != nil {
+				return err
+			}
+			m.Strategies = append(m.Strategies, s)
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
+
 type QueryStrategyRequest struct {
 	StrategyID string `json:"strategy_id"`
 }
@@ -366,6 +486,35 @@ func (m *QueryStrategyRequest) ProtoMessage()           {}
 func (m *QueryStrategyRequest) Reset()                  { *m = QueryStrategyRequest{} }
 func (m *QueryStrategyRequest) String() string          { return fmt.Sprintf("query_strategy: id=%s", m.StrategyID) }
 func (m *QueryStrategyRequest) XXX_MessageName() string { return "syreen.intent.QueryStrategyRequest" }
+
+func (m *QueryStrategyRequest) Marshal() ([]byte, error)              { return appendString(nil, 1, m.StrategyID), nil }
+func (m *QueryStrategyRequest) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryStrategyRequest) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryStrategyRequest) Unmarshal(data []byte) error {
+	*m = QueryStrategyRequest{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		if num == 1 && typ == protowire.BytesType {
+			v, vn := protowire.ConsumeString(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.StrategyID = v
+		} else {
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
 
 type QueryStrategyResponse struct {
 	Strategy Strategy         `json:"strategy"`
@@ -377,6 +526,63 @@ func (m *QueryStrategyResponse) ProtoMessage()           {}
 func (m *QueryStrategyResponse) Reset()                  { *m = QueryStrategyResponse{} }
 func (m *QueryStrategyResponse) String() string          { return fmt.Sprintf("strategy: %+v", m.Strategy) }
 func (m *QueryStrategyResponse) XXX_MessageName() string { return "syreen.intent.QueryStrategyResponse" }
+
+func (m *QueryStrategyResponse) Marshal() ([]byte, error) {
+	b, err := appendJSON(nil, 1, &m.Strategy)
+	if err != nil {
+		return nil, err
+	}
+	if b, err = appendJSON(b, 2, &m.Chain); err != nil {
+		return nil, err
+	}
+	return appendBool(b, 3, m.Found), nil
+}
+func (m *QueryStrategyResponse) MarshalToSizedBuffer(d []byte) (int, error) { return sizedBuffer(d, m.Marshal) }
+func (m *QueryStrategyResponse) Size() int                            { b, _ := m.Marshal(); return len(b) }
+func (m *QueryStrategyResponse) Unmarshal(data []byte) error {
+	*m = QueryStrategyResponse{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		data = data[n:]
+		switch {
+		case num == 1 && typ == protowire.BytesType:
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			if err := json.Unmarshal(v, &m.Strategy); err != nil {
+				return err
+			}
+		case num == 2 && typ == protowire.BytesType:
+			v, vn := protowire.ConsumeBytes(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			if err := json.Unmarshal(v, &m.Chain); err != nil {
+				return err
+			}
+		case num == 3 && typ == protowire.VarintType:
+			v, vn := protowire.ConsumeVarint(data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+			m.Found = v != 0
+		default:
+			vn := protowire.ConsumeFieldValue(num, typ, data)
+			if vn < 0 {
+				return protowire.ParseError(vn)
+			}
+			data = data[vn:]
+		}
+	}
+	return nil
+}
 
 // Error codes for strategies
 var (
