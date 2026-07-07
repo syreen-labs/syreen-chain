@@ -199,6 +199,19 @@ func (k *Keeper) tryDCA(ctx context.Context, intent types.Intent) error {
 		return fmt.Errorf("all %d DCA executions completed", body.NumExecutions)
 	}
 
+	// Defense in depth (this runs in BeginBlock via ExecuteTradingIntents): a nil
+	// or non-positive total_amount would panic in QuoRaw below (nil big.Int) —
+	// halting the chain. SubmitIntent rejects such bodies up front, but guard here
+	// too so a body reaching execution by any other path fails the intent, not the
+	// chain. (NumExecutions == 0 is already handled by the done-check above.)
+	if body.TotalAmount.IsNil() || !body.TotalAmount.IsPositive() {
+		intent.Status = types.StatusFailed
+		k.SetIntent(ctx, intent)
+		k.refundIntentFees(ctx, intent)
+		k.FailChainIfLinked(ctx, intent)
+		return fmt.Errorf("DCA intent has invalid total_amount")
+	}
+
 	// Calculate per-execution amount
 	remaining := body.NumExecutions - body.ExecutedCount
 	perExecAmount := body.TotalAmount.QuoRaw(int64(remaining))

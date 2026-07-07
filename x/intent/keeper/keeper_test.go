@@ -90,6 +90,10 @@ func (m *mockAccountKeeper) GetModuleAddress(moduleName string) sdk.AccAddress {
 	return sdk.AccAddress([]byte(moduleName))
 }
 
+func (m *mockAccountKeeper) GetModuleAccount(_ context.Context, moduleName string) sdk.ModuleAccountI {
+	return authtypes.NewEmptyModuleAccount(moduleName)
+}
+
 // ---------- Mock BankKeeper ----------
 
 type mockBankKeeper struct {
@@ -1399,6 +1403,77 @@ func TestSubmitIntent_StopLoss(t *testing.T) {
 	intent, found := k.GetIntent(ctx, id)
 	require.True(t, found)
 	require.Equal(t, types.IntentTypeStopLoss, intent.IntentType)
+}
+
+// ===================== Body validation (defense in depth) =====================
+
+// A trading body with a nil input_amount must be rejected cleanly at submit,
+// NOT reach extractTradingInputCoins where sdk.NewCoin(nil) would panic.
+func TestSubmitIntent_TradingNilInputAmount_Rejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	// total_amount / input_amount omitted -> nil math.Int after unmarshal.
+	msg := &types.MsgSubmitIntent{
+		Creator:      creatorAddr,
+		IntentType:   types.IntentTypeLimitBuy,
+		Body:         json.RawMessage(`{"input_denom":"usyreen","output_denom":"uatom","target_price":"0.5","pool_id":1}`),
+		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		ExpiryBlocks: 50,
+	}
+	var err error
+	require.NotPanics(t, func() { _, err = k.SubmitIntent(ctx, msg) })
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "input_amount")
+}
+
+// A trading body with an empty denom must be rejected at submit (sdk.NewCoin
+// would otherwise panic on an invalid denom).
+func TestSubmitIntent_TradingEmptyDenom_Rejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msg := &types.MsgSubmitIntent{
+		Creator:      creatorAddr,
+		IntentType:   types.IntentTypeLimitSell,
+		Body:         json.RawMessage(`{"input_denom":"","output_denom":"uatom","input_amount":"1000","target_price":"0.5","pool_id":1}`),
+		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		ExpiryBlocks: 50,
+	}
+	var err error
+	require.NotPanics(t, func() { _, err = k.SubmitIntent(ctx, msg) })
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "input_denom")
+}
+
+// A DCA body with a nil total_amount must be rejected at submit — otherwise it
+// would panic in extractTradingInputCoins on submit and (if it somehow reached
+// state) in tryDCA's QuoRaw during BeginBlock.
+func TestSubmitIntent_DCANilTotalAmount_Rejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msg := &types.MsgSubmitIntent{
+		Creator:      creatorAddr,
+		IntentType:   types.IntentTypeDCA,
+		Body:         json.RawMessage(`{"input_denom":"usyreen","output_denom":"uatom","num_executions":5,"interval_blocks":10,"pool_id":1}`),
+		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		ExpiryBlocks: 500,
+	}
+	var err error
+	require.NotPanics(t, func() { _, err = k.SubmitIntent(ctx, msg) })
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "total_amount")
+}
+
+// A DCA body with zero num_executions is rejected (would strand locked funds and
+// risks a divide path in execution).
+func TestSubmitIntent_DCAZeroNumExecutions_Rejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msg := &types.MsgSubmitIntent{
+		Creator:      creatorAddr,
+		IntentType:   types.IntentTypeDCA,
+		Body:         json.RawMessage(`{"input_denom":"usyreen","output_denom":"uatom","total_amount":"1000000","num_executions":0,"interval_blocks":10,"pool_id":1}`),
+		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		ExpiryBlocks: 500,
+	}
+	_, err := k.SubmitIntent(ctx, msg)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "num_executions")
 }
 
 func TestGetIntentsByType(t *testing.T) {

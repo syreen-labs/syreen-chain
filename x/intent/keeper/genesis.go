@@ -11,6 +11,14 @@ import (
 
 // InitGenesis initializes the module's state from a provided genesis state
 func (k Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) {
+	// Force-create the module account so its address resolves as a real
+	// ModuleAccount from block 0. The intent account is intentionally left out of
+	// the bank blocklist (it must receive DEX swap outputs), so without this a user
+	// could bank-send to the address before the module first uses it, creating a
+	// BaseAccount and corrupting the account (later escrow panics with
+	// "account is not a module account").
+	k.accountKeeper.GetModuleAccount(ctx, types.ModuleName)
+
 	k.SetParams(ctx, data.Params)
 
 	for _, intent := range data.Intents {

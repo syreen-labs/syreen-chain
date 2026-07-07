@@ -13,6 +13,13 @@ import (
 type AccountKeeper interface {
 	GetAccount(ctx context.Context, addr sdk.AccAddress) sdk.AccountI
 	GetModuleAddress(moduleName string) sdk.AccAddress
+	// GetModuleAccount returns the module account, creating and persisting it if it
+	// does not yet exist. InitGenesis calls this so the intent module account is a
+	// real ModuleAccount from block 0 — otherwise, because the intent account is
+	// deliberately left unblocked (see app.BlockedModuleAccountAddrs), a user could
+	// bank-send to its address before first use, creating a plain BaseAccount and
+	// corrupting it ("account is not a module account" on the next escrow).
+	GetModuleAccount(ctx context.Context, moduleName string) sdk.ModuleAccountI
 }
 
 // BankKeeper defines the expected bank keeper interface

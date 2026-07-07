@@ -102,6 +102,158 @@ func (k Keeper) Logger(ctx context.Context) log.Logger {
 const MaxIntentsPerUserPerBlock = 10
 
 // SubmitIntent creates a new intent and locks the maxFee from the creator
+// validateIntentBody performs defense-in-depth validation of an intent body at
+// submission time. It guarantees that any body which later reaches the trading
+// execution paths (extractTradingInputCoins at submit, and executeTradingSwap /
+// tryDCA in BeginBlock) carries non-nil, positive amounts and valid denoms — so
+// downstream sdk.NewCoin / QuoRaw calls cannot panic on malformed input. Swap
+// intents keep their historical, looser rules (input is delivered by the solver,
+// not locked here): only a parseable body and a non-negative min floor.
+func validateIntentBody(intentType string, body json.RawMessage) error {
+	requirePositive := func(field string, amt math.Int) error {
+		if amt.IsNil() {
+			return fmt.Errorf("%s must be set", field)
+		}
+		if !amt.IsPositive() {
+			return fmt.Errorf("%s must be positive", field)
+		}
+		return nil
+	}
+	requireDenom := func(field, denom string) error {
+		if err := sdk.ValidateDenom(denom); err != nil {
+			return fmt.Errorf("invalid %s %q: %w", field, denom, err)
+		}
+		return nil
+	}
+	// An optional min-output floor: nil (omitted) is allowed and treated as zero
+	// downstream; a set value must be >= 0.
+	requireNonNegMin := func(amt math.Int) error {
+		if !amt.IsNil() && amt.IsNegative() {
+			return fmt.Errorf("min_output_amount must not be negative")
+		}
+		return nil
+	}
+
+	switch intentType {
+	case types.IntentTypeSwap:
+		var b types.SwapIntent
+		if err := json.Unmarshal(body, &b); err != nil {
+			return fmt.Errorf("invalid swap intent body: %w", err)
+		}
+		return requireNonNegMin(b.MinOutputAmount)
+
+	case types.IntentTypeLimitBuy:
+		var b types.LimitBuyIntent
+		if err := json.Unmarshal(body, &b); err != nil {
+			return fmt.Errorf("invalid limit_buy intent body: %w", err)
+		}
+		if err := requireDenom("input_denom", b.InputDenom); err != nil {
+			return err
+		}
+		if err := requireDenom("output_denom", b.OutputDenom); err != nil {
+			return err
+		}
+		if err := requirePositive("input_amount", b.InputAmount); err != nil {
+			return err
+		}
+		return requireNonNegMin(b.MinOutputAmount)
+
+	case types.IntentTypeLimitSell:
+		var b types.LimitSellIntent
+		if err := json.Unmarshal(body, &b); err != nil {
+			return fmt.Errorf("invalid limit_sell intent body: %w", err)
+		}
+		if err := requireDenom("input_denom", b.InputDenom); err != nil {
+			return err
+		}
+		if err := requireDenom("output_denom", b.OutputDenom); err != nil {
+			return err
+		}
+		if err := requirePositive("input_amount", b.InputAmount); err != nil {
+			return err
+		}
+		return requireNonNegMin(b.MinOutputAmount)
+
+	case types.IntentTypeStopLoss:
+		var b types.StopLossIntent
+		if err := json.Unmarshal(body, &b); err != nil {
+			return fmt.Errorf("invalid stop_loss intent body: %w", err)
+		}
+		if err := requireDenom("input_denom", b.InputDenom); err != nil {
+			return err
+		}
+		if err := requireDenom("output_denom", b.OutputDenom); err != nil {
+			return err
+		}
+		if err := requirePositive("input_amount", b.InputAmount); err != nil {
+			return err
+		}
+		return requireNonNegMin(b.MinOutputAmount)
+
+	case types.IntentTypeTakeProfit:
+		var b types.TakeProfitIntent
+		if err := json.Unmarshal(body, &b); err != nil {
+			return fmt.Errorf("invalid take_profit intent body: %w", err)
+		}
+		if err := requireDenom("input_denom", b.InputDenom); err != nil {
+			return err
+		}
+		if err := requireDenom("output_denom", b.OutputDenom); err != nil {
+			return err
+		}
+		if err := requirePositive("input_amount", b.InputAmount); err != nil {
+			return err
+		}
+		return requireNonNegMin(b.MinOutputAmount)
+
+	case types.IntentTypeDCA, types.IntentTypeTWAP:
+		var b types.DCAIntent
+		if err := json.Unmarshal(body, &b); err != nil {
+			return fmt.Errorf("invalid dca/twap intent body: %w", err)
+		}
+		if err := requireDenom("input_denom", b.InputDenom); err != nil {
+			return err
+		}
+		if err := requireDenom("output_denom", b.OutputDenom); err != nil {
+			return err
+		}
+		if err := requirePositive("total_amount", b.TotalAmount); err != nil {
+			return err
+		}
+		if b.NumExecutions == 0 {
+			return fmt.Errorf("num_executions must be greater than zero")
+		}
+		return nil
+
+	case types.IntentTypeCrossChainSwap:
+		var b types.CrossChainSwapIntent
+		if err := json.Unmarshal(body, &b); err != nil {
+			return fmt.Errorf("invalid cross_chain_swap intent body: %w", err)
+		}
+		if err := requireDenom("input_denom", b.InputDenom); err != nil {
+			return err
+		}
+		if err := requireDenom("output_denom", b.OutputDenom); err != nil {
+			return err
+		}
+		if err := requirePositive("input_amount", b.InputAmount); err != nil {
+			return err
+		}
+		if b.Receiver == "" {
+			return fmt.Errorf("receiver must be set for cross_chain_swap")
+		}
+		if b.IBCSourceChannel == "" {
+			return fmt.Errorf("ibc_source_channel must be set for cross_chain_swap")
+		}
+		return requireNonNegMin(b.MinOutputAmount)
+
+	default:
+		// Non-trading / unknown intent types are not amount-bearing here; leave
+		// their handling to their own execution paths.
+		return nil
+	}
+}
+
 func (k Keeper) SubmitIntent(ctx context.Context, msg *types.MsgSubmitIntent) (string, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	params := k.GetParams(ctx)
@@ -123,19 +275,14 @@ func (k Keeper) SubmitIntent(ctx context.Context, msg *types.MsgSubmitIntent) (s
 		return "", fmt.Errorf("rate limit exceeded: maximum %d intents per user per block", MaxIntentsPerUserPerBlock)
 	}
 
-	// Defense in depth: a swap intent's body must be parseable, and if it does
-	// specify a min_output_amount that floor must not be negative. A nil floor
-	// (omitted) is allowed and treated as zero downstream. verifySwapOutcome
-	// normalizes nil safely, but rejecting a negative floor and unparseable
-	// bodies up front keeps obviously-malformed swap intents out of state.
-	if msg.IntentType == types.IntentTypeSwap {
-		var swapBody types.SwapIntent
-		if err := json.Unmarshal(msg.Body, &swapBody); err != nil {
-			return "", fmt.Errorf("invalid swap intent body: %w", err)
-		}
-		if !swapBody.MinOutputAmount.IsNil() && swapBody.MinOutputAmount.IsNegative() {
-			return "", fmt.Errorf("swap intent min_output_amount must not be negative")
-		}
+	// Defense in depth: reject malformed intent bodies at submission so they never
+	// enter state and reach the BeginBlock execution paths. A nil/zero input amount
+	// on a trading body would otherwise panic in sdk.NewCoin (extractTradingInputCoins
+	// / executeTradingSwap); an empty denom would produce invalid coins. Validating
+	// here keeps the BeginBlock choke points (guarded separately) from ever seeing
+	// obviously-broken bodies.
+	if err := validateIntentBody(msg.IntentType, msg.Body); err != nil {
+		return "", err
 	}
 
 	// Generate intent ID
