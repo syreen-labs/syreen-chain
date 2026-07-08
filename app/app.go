@@ -1290,6 +1290,37 @@ func NewSyreenApp(
 		},
 	)
 
+	// v2.4.0: Fairness Engine security + Return hardening. Code changes: intent
+	// escrow-drain fix (executeSolutionMsgs balance invariants), terminal-intent
+	// pruning (liveness), real user-first fairness-pool redistribution + slashed
+	// stake routed to the pool, MEV solo-validator slash guard, and BeginBlock
+	// nil-amount panic guards. State change here: extend the intent allowed-msg
+	// whitelist with the DEX swap settlement primitives so the post-drain-fix
+	// legitimate settlement path (creator-signed DEX swap) works on the live
+	// chain, whose param was set at genesis without them. Idempotent.
+	app.UpgradeKeeper.SetUpgradeHandler("v2.4.0",
+		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			logger.Info("applying v2.4.0 upgrade: Fairness Engine security + Return hardening", "height", sdkCtx.BlockHeight())
+
+			p := app.IntentKeeper.GetParams(ctx)
+			have := make(map[string]bool, len(p.AllowedMsgTypes))
+			for _, t := range p.AllowedMsgTypes {
+				have[t] = true
+			}
+			for _, t := range []string{"/syreen.dex.MsgSwap", "/syreen.dex.MsgMultiHopSwap"} {
+				if !have[t] {
+					p.AllowedMsgTypes = append(p.AllowedMsgTypes, t)
+				}
+			}
+			if err := app.IntentKeeper.SetParams(ctx, p); err != nil {
+				return nil, err
+			}
+
+			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
+
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
 			// If latest version is corrupt (e.g. mid-commit crash), try
