@@ -1203,6 +1203,7 @@ func (k Keeper) ExpireIntents(ctx context.Context) {
 	defer iter.Close()
 
 	var expiredIntents []types.Intent
+	var pruneIntentIDs []string
 	for ; iter.Valid(); iter.Next() {
 		key := iter.Key()
 		if !bytes.HasPrefix(key, prefix) {
@@ -1214,7 +1215,21 @@ func (k Keeper) ExpireIntents(ctx context.Context) {
 		}
 		if (intent.Status == types.StatusPending || intent.Status == types.StatusSolving) && sdkCtx.BlockHeight() > intent.Expiry {
 			expiredIntents = append(expiredIntents, intent)
+			continue
 		}
+		// LIVENESS: terminal intents (fulfilled/failed/expired) are never otherwise
+		// deleted, so every BeginBlock re-scans and re-unmarshals the entire intent
+		// history — an unbounded cost an attacker can grow with cheap zero-fee
+		// intents until block production stalls. Prune terminal intents once they
+		// are older than the retention window so the working set stays bounded.
+		if intent.IsTerminal() && sdkCtx.BlockHeight()-intent.CreatedAt > types.IntentPruneRetentionBlocks {
+			pruneIntentIDs = append(pruneIntentIDs, intent.ID)
+		}
+	}
+
+	for _, id := range pruneIntentIDs {
+		kvStore.Delete(types.IntentKey(id))
+		k.deleteSolutionsForIntent(ctx, id)
 	}
 
 	for _, intent := range expiredIntents {

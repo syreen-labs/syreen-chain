@@ -20,6 +20,17 @@ const (
 	StatusFailed    IntentStatus = "failed"
 )
 
+// IntentPruneRetentionBlocks is how long a terminal intent (fulfilled/failed/
+// expired) is kept in state before it is pruned, bounding the BeginBlock scan
+// cost. ~100k blocks ≈ 10h at 375ms; ample for clients/indexers to read history.
+const IntentPruneRetentionBlocks int64 = 100000
+
+// IsTerminal reports whether the intent has reached a final state and will no
+// longer be processed (so it is eligible for pruning after the retention window).
+func (m *Intent) IsTerminal() bool {
+	return m.Status == StatusFulfilled || m.Status == StatusExpired || m.Status == StatusFailed
+}
+
 // Intent type constants
 const (
 	IntentTypeSwap     = "swap"

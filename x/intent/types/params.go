@@ -29,6 +29,13 @@ var (
 		"/cosmos.bank.v1beta1.MsgMultiSend",
 		"/ibc.applications.transfer.v1.MsgTransfer",
 		"/syreen.compute.MsgExecuteContract",
+		// DEX swaps are the legitimate best-execution settlement primitive: a
+		// solver crafts a creator-signed MsgSwap that consumes the creator's own
+		// input (bounded by the executeSolutionMsgs balance invariants) and
+		// delivers output back to the creator. This is safe because it cannot
+		// touch pooled escrow or spend a creator denom beyond the declared input.
+		"/syreen.dex.MsgSwap",
+		"/syreen.dex.MsgMultiHopSwap",
 	}
 )
 
@@ -78,6 +85,17 @@ func (p Params) Validate() error {
 	}
 	if p.IntentExpiryBlocks == 0 {
 		return fmt.Errorf("intent expiry blocks must be greater than 0")
+	}
+	if p.SolverUnbondingBlocks == 0 {
+		return fmt.Errorf("solver unbonding blocks must be greater than 0")
+	}
+	if p.EnableChains && p.MaxChainSteps == 0 {
+		return fmt.Errorf("max chain steps must be greater than 0 when chains are enabled")
+	}
+	for _, t := range p.AllowedMsgTypes {
+		if t == "" || t[0] != '/' {
+			return fmt.Errorf("allowed msg type must be a non-empty type URL beginning with '/': %q", t)
+		}
 	}
 	return nil
 }

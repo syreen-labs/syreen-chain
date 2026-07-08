@@ -1545,3 +1545,31 @@ func TestGetIntentsByType(t *testing.T) {
 	dcas := k.GetIntentsByType(ctx, types.IntentTypeDCA)
 	require.Len(t, dcas, 0)
 }
+
+// Terminal intents older than the retention window are pruned from state so the
+// BeginBlock scan cost stays bounded (liveness DoS defense).
+func TestExpireIntents_PrunesStaleTerminalIntents(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	// A fulfilled intent created long ago (older than retention).
+	old := types.Intent{
+		ID: "old", Creator: creatorAddr, IntentType: types.IntentTypeSwap,
+		Body: swapIntentBody(), Status: types.StatusFulfilled,
+		CreatedAt: 1, Expiry: 10,
+	}
+	k.SetIntent(ctx, old)
+	// A recent fulfilled intent (within retention).
+	recent := types.Intent{
+		ID: "recent", Creator: creatorAddr, IntentType: types.IntentTypeSwap,
+		Body: swapIntentBody(), Status: types.StatusFulfilled,
+		CreatedAt: 100, Expiry: 110,
+	}
+	k.SetIntent(ctx, recent)
+
+	ctx = ctx.WithBlockHeight(1 + types.IntentPruneRetentionBlocks + 5)
+	k.ExpireIntents(ctx)
+
+	_, foundOld := k.GetIntent(ctx, "old")
+	require.False(t, foundOld, "stale terminal intent should be pruned")
+	_, foundRecent := k.GetIntent(ctx, "recent")
+	require.True(t, foundRecent, "recent terminal intent should be retained")
+}
