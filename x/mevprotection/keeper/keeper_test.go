@@ -59,17 +59,32 @@ func (m *mockStakingKeeper) GetBondedValidatorsByPower(_ context.Context) ([]sta
 	return vals, nil
 }
 
-type mockBankKeeper struct{}
+type mockBankKeeper struct {
+	poolBalance  sdk.Coins                 // what GetAllBalances(module) returns
+	moduleSends  map[string]sdk.Coins      // recipientModule -> coins sent
+	accountSends map[string]sdk.Coins      // recipientAddr(bech32) -> coins sent
+}
 
 func (m *mockBankKeeper) MintCoins(_ context.Context, _ string, _ sdk.Coins) error {
 	return nil
 }
+func (m *mockBankKeeper) GetAllBalances(_ context.Context, _ sdk.AccAddress) sdk.Coins {
+	return m.poolBalance
+}
 
-func (m *mockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, _, _ string, _ sdk.Coins) error {
+func (m *mockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, _, recipient string, amt sdk.Coins) error {
+	if m.moduleSends == nil {
+		m.moduleSends = map[string]sdk.Coins{}
+	}
+	m.moduleSends[recipient] = m.moduleSends[recipient].Add(amt...)
 	return nil
 }
 
-func (m *mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, _ string, _ sdk.AccAddress, _ sdk.Coins) error {
+func (m *mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, _ string, recipient sdk.AccAddress, amt sdk.Coins) error {
+	if m.accountSends == nil {
+		m.accountSends = map[string]sdk.Coins{}
+	}
+	m.accountSends[recipient.String()] = m.accountSends[recipient.String()].Add(amt...)
 	return nil
 }
 
@@ -719,4 +734,34 @@ func TestDetectMEV_NoViolationReturnsNil(t *testing.T) {
 	require.Nil(t, penalty)
 	require.Equal(t, 0, slashCalls)
 	require.Equal(t, 0, jailCalls)
+}
+
+// The fairness pool pays out REAL coins user-first: 50% to trading users
+// (proportional to weight), 30% to LPs (dex module), 20% to stakers (fee collector).
+func TestDistributeMEVRewards_UserFirstRealCoins(t *testing.T) {
+	storeKey := storetypes.NewKVStoreKey("mevprotection")
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	require.NoError(t, stateStore.LoadLatestVersion())
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100, Time: time.Now()}, false, log.NewNopLogger())
+	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
+
+	bank := &mockBankKeeper{poolBalance: sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1000))}
+	k := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), &mockStakingKeeper{}, &mockSlashingKeeper{}, bank, "authority")
+
+	userA := sdk.AccAddress([]byte("userA_______________")).String()
+	userB := sdk.AccAddress([]byte("userB_______________")).String()
+	k.RecordRebateBeneficiary(ctx, userA, math.NewInt(3)) // 75% of user tranche
+	k.RecordRebateBeneficiary(ctx, userB, math.NewInt(1)) // 25% of user tranche
+
+	k.DistributeMEVRewards(ctx) // height 100 -> fires
+
+	// User tranche = 50% of 1000 = 500, split 3:1 -> A=375, B=125
+	require.Equal(t, "375usyreen", bank.accountSends[userA].String())
+	require.Equal(t, "125usyreen", bank.accountSends[userB].String())
+	// LP tranche = 30% -> dex module
+	require.Equal(t, "300usyreen", bank.moduleSends["dex"].String())
+	// Staker tranche = remainder 20% -> fee collector
+	require.Equal(t, "200usyreen", bank.moduleSends["fee_collector"].String())
 }

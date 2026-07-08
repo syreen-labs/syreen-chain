@@ -8,6 +8,9 @@ import (
 
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+
+	"syreen/x/mevprotection/types"
 )
 
 // ---------------------------------------------------------------------------
@@ -22,20 +25,24 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	// MEVRewardPoolPrefix stores accumulated MEV rewards by denom
+	// MEVRewardPoolPrefix stores accumulated MEV rewards by denom (lifetime stats)
 	MEVRewardPoolPrefix = "mev_reward_pool/"
 
 	// MEVTotalRedistributedPrefix stores lifetime redistribution stats by denom
 	MEVTotalRedistributedPrefix = "mev_total_redistributed/"
 
+	// RebateWeightPrefix stores each eligible user's rebate weight (a trade-size
+	// proxy) for the current distribution window: rebate_weight/<addr> -> Int.
+	RebateWeightPrefix = "rebate_weight/"
+
 	// MEVDistributionInterval is the number of blocks between distributions
 	MEVDistributionInterval = int64(100)
 
-	// LPRewardShareBps is the LP share in basis points (60%)
-	LPRewardShareBps = int64(6000)
-
-	// StakerRewardShareBps is the staker share in basis points (40%)
-	StakerRewardShareBps = int64(4000)
+	// Fairness Engine · Return: the harmed/trading USER is the first-priority
+	// recipient, ahead of LPs and stakers. Shares are basis points and sum to 10000.
+	UserRebateShareBps   = int64(5000) // 50% -> users (rebated first)
+	LPRewardShareBps     = int64(3000) // 30% -> LPs (added to DEX reserves)
+	StakerRewardShareBps = int64(2000) // 20% -> stakers (via fee collector)
 )
 
 // DexKeeper defines the interface needed from the dex module to get pool info.
@@ -151,11 +158,104 @@ func (k Keeper) GetTotalMEVRedistributed(ctx context.Context) sdk.Coins {
 	return coins
 }
 
-// DistributeMEVRewards distributes accumulated MEV rewards.
-// Called in EndBlock every MEVDistributionInterval blocks.
-// - 60% goes to LP providers by sending tokens to the DEX module account
-//   (which increases pool reserves, boosting LP share value).
-// - 40% goes to the distribution module's community pool for staker rewards.
+// CreditFairnessPool moves REAL coins from another module account into the
+// fairness pool (this module's account) and, if a beneficiary is given, records
+// them as eligible for the user-first rebate weighted by the credited amount.
+// This is the single funding entry point (e.g. intent routes slashed solver
+// stake here instead of orphaning it in the distribution account).
+func (k Keeper) CreditFairnessPool(ctx context.Context, fromModule string, coins sdk.Coins, beneficiary string) error {
+	if coins.IsZero() {
+		return nil
+	}
+	if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, fromModule, types.ModuleName, coins); err != nil {
+		return err
+	}
+	// Mirror into the lifetime accumulator (drives the MEVRedistribution query).
+	k.AccumulateMEVReward(ctx, coins)
+	if beneficiary != "" {
+		k.RecordRebateBeneficiary(ctx, beneficiary, coins.AmountOf(sdk.DefaultBondDenom))
+	}
+	return nil
+}
+
+// RecordRebateBeneficiary adds rebate weight (a trade-size proxy, e.g. the
+// intent's tip/fee) for a user so the next distribution rebates them first.
+// Callers on trade fulfillment mark the trading user here.
+func (k Keeper) RecordRebateBeneficiary(ctx context.Context, addr string, weight math.Int) {
+	if addr == "" || weight.IsNil() || !weight.IsPositive() {
+		return
+	}
+	if _, err := sdk.AccAddressFromBech32(addr); err != nil {
+		return
+	}
+	kv := k.storeService.OpenKVStore(ctx)
+	key := []byte(RebateWeightPrefix + addr)
+	existing := math.ZeroInt()
+	if bz, err := kv.Get(key); err == nil && bz != nil {
+		_ = existing.Unmarshal(bz)
+	}
+	total := existing.Add(weight)
+	if bz, err := total.Marshal(); err == nil {
+		_ = kv.Set(key, bz)
+	}
+}
+
+// rebateBeneficiaries returns the eligible users and their weights, sorted by
+// address for deterministic distribution.
+func (k Keeper) rebateBeneficiaries(ctx context.Context) (addrs []string, weights []math.Int, total math.Int) {
+	kv := k.storeService.OpenKVStore(ctx)
+	prefix := []byte(RebateWeightPrefix)
+	iter, err := kv.Iterator(prefix, prefixEndBytes(prefix))
+	total = math.ZeroInt()
+	if err != nil {
+		return nil, nil, total
+	}
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		addr := string(iter.Key()[len(prefix):])
+		w := math.ZeroInt()
+		if err := w.Unmarshal(iter.Value()); err != nil || !w.IsPositive() {
+			continue
+		}
+		addrs = append(addrs, addr)
+		weights = append(weights, w)
+		total = total.Add(w)
+	}
+	sort.Slice(addrs, func(i, j int) bool { return addrs[i] < addrs[j] })
+	// re-derive weights in the sorted order
+	wmap := make(map[string]math.Int, len(addrs))
+	for i := range addrs {
+		wmap[addrs[i]] = weights[i]
+	}
+	sortedW := make([]math.Int, len(addrs))
+	for i, a := range addrs {
+		sortedW[i] = wmap[a]
+	}
+	return addrs, sortedW, total
+}
+
+func (k Keeper) clearRebateLedger(ctx context.Context) {
+	kv := k.storeService.OpenKVStore(ctx)
+	prefix := []byte(RebateWeightPrefix)
+	iter, err := kv.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return
+	}
+	var keys [][]byte
+	for ; iter.Valid(); iter.Next() {
+		keys = append(keys, append([]byte{}, iter.Key()...))
+	}
+	iter.Close()
+	for _, key := range keys {
+		_ = kv.Delete(key)
+	}
+}
+
+// DistributeMEVRewards pays out the fairness pool's REAL balance every
+// MEVDistributionInterval blocks, user-first: 50% rebated to trading users
+// (proportional to weight), 30% to LPs (into the DEX module account, boosting
+// reserves), 20% to stakers (via the fee collector, distributed next block).
+// Unlike the previous accounting-only stub, this moves actual coins.
 func (k Keeper) DistributeMEVRewards(ctx context.Context) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
@@ -164,48 +264,79 @@ func (k Keeper) DistributeMEVRewards(ctx context.Context) {
 		return
 	}
 
-	rewardPool := k.GetMEVRewardPool(ctx)
-	if rewardPool.IsZero() {
+	poolAddr := authtypes.NewModuleAddress(types.ModuleName)
+	pool := k.bankKeeper.GetAllBalances(ctx, poolAddr)
+	if pool.IsZero() {
 		return
 	}
 
-	// Calculate LP portion (60%) and staker portion (40%)
-	var lpCoins sdk.Coins
-	var stakerCoins sdk.Coins
+	users, weights, totalWeight := k.rebateBeneficiaries(ctx)
+	hasUsers := len(users) > 0 && totalWeight.IsPositive()
 
-	for _, coin := range rewardPool {
-		lpAmount := coin.Amount.MulRaw(LPRewardShareBps).QuoRaw(10000)
-		stakerAmount := coin.Amount.Sub(lpAmount) // remainder goes to stakers
+	var distributed sdk.Coins
+	for _, coin := range pool {
+		userAmt := coin.Amount.MulRaw(UserRebateShareBps).QuoRaw(10000)
+		lpAmt := coin.Amount.MulRaw(LPRewardShareBps).QuoRaw(10000)
+		// Stakers get the remainder so nothing is lost to rounding.
+		stakerAmt := coin.Amount.Sub(userAmt).Sub(lpAmt)
 
-		if lpAmount.IsPositive() {
-			lpCoins = append(lpCoins, sdk.NewCoin(coin.Denom, lpAmount))
+		// USER tranche (first). If there are no eligible users, fold it into the
+		// staker tranche rather than stranding it.
+		if hasUsers && userAmt.IsPositive() {
+			paid := math.ZeroInt()
+			for i, addr := range users {
+				share := userAmt.Mul(weights[i]).Quo(totalWeight)
+				if i == len(users)-1 {
+					share = userAmt.Sub(paid) // last user absorbs rounding dust
+				}
+				if !share.IsPositive() {
+					continue
+				}
+				acc, err := sdk.AccAddressFromBech32(addr)
+				if err != nil {
+					stakerAmt = stakerAmt.Add(share)
+					paid = paid.Add(share)
+					continue
+				}
+				if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, acc, sdk.NewCoins(sdk.NewCoin(coin.Denom, share))); err != nil {
+					stakerAmt = stakerAmt.Add(share)
+				}
+				paid = paid.Add(share)
+			}
+		} else {
+			stakerAmt = stakerAmt.Add(userAmt)
 		}
-		if stakerAmount.IsPositive() {
-			stakerCoins = append(stakerCoins, sdk.NewCoin(coin.Denom, stakerAmount))
+
+		// LP tranche -> DEX module account (increases reserves).
+		if lpAmt.IsPositive() {
+			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "dex", sdk.NewCoins(sdk.NewCoin(coin.Denom, lpAmt))); err != nil {
+				stakerAmt = stakerAmt.Add(lpAmt) // fall back to stakers if DEX send fails
+			}
 		}
+
+		// STAKER tranche -> fee collector (distribution pays stakers next block).
+		if stakerAmt.IsPositive() {
+			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, authtypes.FeeCollectorName, sdk.NewCoins(sdk.NewCoin(coin.Denom, stakerAmt))); err != nil {
+				k.Logger(ctx).Error("fairness: staker tranche send failed", "denom", coin.Denom, "error", err)
+				continue
+			}
+		}
+		distributed = distributed.Add(coin)
 	}
 
-	// The slashed tokens from validators are already captured by the staking module
-	// and sent to the community pool. We do NOT mint new tokens — that would cause
-	// inflation and double-count the slashed amount. Instead, we track the
-	// redistribution as an accounting entry. The actual tokens for redistribution
-	// are already in the community pool from the slashing event.
-	k.Logger(ctx).Info("MEV redistribution recorded (accounting only, no mint)",
-		"lp_share", lpCoins.String(),
-		"staker_share", stakerCoins.String(),
-		"height", sdkCtx.BlockHeight(),
-	)
+	k.Logger(ctx).Info("fairness pool distributed (real coins)",
+		"total", distributed.String(), "users", len(users), "height", sdkCtx.BlockHeight())
 
-	// Update lifetime stats
-	k.addToTotalRedistributed(ctx, rewardPool)
-
-	// Clear the reward pool
+	// Update lifetime stats and clear the window ledgers.
+	k.addToTotalRedistributed(ctx, distributed)
+	k.clearRebateLedger(ctx)
+	// The reward-pool counter mirrors the pool; clear it now that we paid out.
 	k.clearRewardPool(ctx)
 
 	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
 		"mev_redistribution",
-		sdk.NewAttribute("lp_rewards", lpCoins.String()),
-		sdk.NewAttribute("staker_rewards", stakerCoins.String()),
+		sdk.NewAttribute("distributed", distributed.String()),
+		sdk.NewAttribute("users_rebated", fmt.Sprintf("%d", len(users))),
 		sdk.NewAttribute("height", fmt.Sprintf("%d", sdkCtx.BlockHeight())),
 	))
 }

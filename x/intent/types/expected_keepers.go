@@ -53,6 +53,14 @@ type TransferKeeper interface {
 	Transfer(ctx context.Context, msg *IBCTransferMsg) (*IBCTransferResponse, error)
 }
 
+// MEVKeeper is the Fairness Engine's "Return" sink. Intent routes slashed solver
+// stake into the fairness pool (real coins) and marks fulfilled-intent creators
+// as user-first rebate beneficiaries. Optional — nil-safe at the call sites.
+type MEVKeeper interface {
+	CreditFairnessPool(ctx context.Context, fromModule string, coins sdk.Coins, beneficiary string) error
+	RecordRebateBeneficiary(ctx context.Context, addr string, weight math.Int)
+}
+
 // IBCTransferMsg is a minimal representation of ibc MsgTransfer to avoid importing ibc-go directly.
 type IBCTransferMsg struct {
 	SourcePort       string   `json:"source_port"`

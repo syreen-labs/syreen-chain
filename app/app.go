@@ -568,6 +568,9 @@ func NewSyreenApp(
 	)
 	app.IntentKeeper.SetDexKeeper(app.DexKeeper)
 	app.IntentKeeper.SetTransferKeeper(&ibcTransferAdapter{keeper: app.TransferKeeper})
+	// Fairness Engine · Return: route slashed solver stake into the fairness pool
+	// and mark fulfilled-intent creators as user-first rebate beneficiaries.
+	app.IntentKeeper.SetMEVKeeper(app.MEVProtectionKeeper)
 
 	// Liquidity Farming
 	farmingK := farmingkeeper.NewKeeper(

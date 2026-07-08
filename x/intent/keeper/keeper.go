@@ -37,6 +37,7 @@ type Keeper struct {
 	bankKeeper    types.BankKeeper
 	dexKeeper      types.DexKeeper
 	transferKeeper types.TransferKeeper
+	mevKeeper      types.MEVKeeper
 	msgRouter      MsgRouter
 	authority     string
 }
@@ -67,6 +68,25 @@ func (k *Keeper) SetDexKeeper(dexKeeper types.DexKeeper) {
 // SetTransferKeeper sets the IBC transfer keeper for cross-chain intents.
 func (k *Keeper) SetTransferKeeper(transferKeeper types.TransferKeeper) {
 	k.transferKeeper = transferKeeper
+}
+
+// SetMEVKeeper wires the Fairness Engine "Return" sink (fairness pool + user
+// rebate ledger). Optional; when nil, slashed stake falls back to the community
+// pool and no rebate beneficiary is recorded.
+func (k *Keeper) SetMEVKeeper(mevKeeper types.MEVKeeper) {
+	k.mevKeeper = mevKeeper
+}
+
+// routeSlashToFairnessPool moves confiscated solver stake into the Fairness
+// Engine pool as REAL coins (the user-rebate funding source) when the MEV keeper
+// is wired; otherwise it falls back to the community pool. Previously the coins
+// were sent to the distribution *account* without FundCommunityPool, orphaning
+// them — routing to the fairness pool both fixes that and funds the rebate.
+func (k Keeper) routeSlashToFairnessPool(ctx context.Context, slashCoins sdk.Coins) error {
+	if k.mevKeeper != nil {
+		return k.mevKeeper.CreditFairnessPool(ctx, types.ModuleName, slashCoins, "")
+	}
+	return k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "distribution", slashCoins)
 }
 
 // isExecuting checks the context-based reentrancy guard.
@@ -635,7 +655,7 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 				slashCoins := sdk.NewCoins(sdk.NewCoin(solver.StakedAmount.Denom, slashAmount))
 
 				// Send slashed coins from intent module to distribution (community pool)
-				if sendErr := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "distribution", slashCoins); sendErr != nil {
+				if sendErr := k.routeSlashToFairnessPool(ctx, slashCoins); sendErr != nil {
 					k.Logger(ctx).Error("failed to slash solver stake to community pool",
 						"solver", solverAddrStr, "amount", slashCoins, "error", sendErr)
 				} else {
@@ -699,7 +719,7 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 				slashAmount := params.SolverSlashFraction.MulInt(solver.StakedAmount.Amount).TruncateInt()
 				if slashAmount.IsPositive() {
 					slashCoins := sdk.NewCoins(sdk.NewCoin(solver.StakedAmount.Denom, slashAmount))
-					if sendErr := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "distribution", slashCoins); sendErr == nil {
+					if sendErr := k.routeSlashToFairnessPool(ctx, slashCoins); sendErr == nil {
 						solver.StakedAmount.Amount = solver.StakedAmount.Amount.Sub(slashAmount)
 					}
 				}
@@ -717,6 +737,14 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 	intent.Status = types.StatusFulfilled
 	intent.SolverAddr = solverAddrStr
 	k.SetIntent(ctx, intent)
+
+	// Fairness Engine · Return: mark the trading user as a first-priority rebate
+	// beneficiary for the next fairness-pool distribution, weighted by their tip
+	// (a trade-size proxy). Nil-safe when the MEV keeper isn't wired.
+	if k.mevKeeper != nil {
+		weight := intent.Tip.AmountOf(sdk.DefaultBondDenom).Add(intent.MaxFee.AmountOf(sdk.DefaultBondDenom))
+		k.mevKeeper.RecordRebateBeneficiary(ctx, intent.Creator, weight)
+	}
 
 	// Pay solver the tip from module account
 	solverAddr, err := sdk.AccAddressFromBech32(solverAddrStr)
