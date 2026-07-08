@@ -28,14 +28,35 @@ import (
 // mock keepers
 // ---------------------------------------------------------------------------
 
-type mockStakingKeeper struct{}
+type mockStakingKeeper struct {
+	// bondedCount controls how many bonded validators GetBondedValidatorsByPower reports.
+	bondedCount int
+	// slashCalls / jailCalls track enforcement actions for assertions.
+	slashCalls *int
+}
 
 func (m *mockStakingKeeper) GetValidator(_ context.Context, _ sdk.ValAddress) (stakingtypes.Validator, error) {
 	return stakingtypes.Validator{}, nil
 }
 
+func (m *mockStakingKeeper) GetValidatorByConsAddr(_ context.Context, _ sdk.ConsAddress) (stakingtypes.Validator, error) {
+	// Return a validator with non-zero tokens so GetConsensusPower > 0.
+	return stakingtypes.Validator{
+		Tokens: sdk.DefaultPowerReduction.MulRaw(10),
+		Status: stakingtypes.Bonded,
+	}, nil
+}
+
 func (m *mockStakingKeeper) Slash(_ context.Context, _ sdk.ConsAddress, _ int64, _ int64, _ math.LegacyDec) (math.Int, error) {
+	if m.slashCalls != nil {
+		*m.slashCalls++
+	}
 	return math.ZeroInt(), nil
+}
+
+func (m *mockStakingKeeper) GetBondedValidatorsByPower(_ context.Context) ([]stakingtypes.Validator, error) {
+	vals := make([]stakingtypes.Validator, m.bondedCount)
+	return vals, nil
 }
 
 type mockBankKeeper struct{}
@@ -52,13 +73,18 @@ func (m *mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, _ strin
 	return nil
 }
 
-type mockSlashingKeeper struct{}
+type mockSlashingKeeper struct {
+	jailCalls *int
+}
 
 func (m *mockSlashingKeeper) Slash(_ context.Context, _ sdk.ConsAddress, _ math.LegacyDec, _ int64, _ int64) error {
 	return nil
 }
 
 func (m *mockSlashingKeeper) Jail(_ context.Context, _ sdk.ConsAddress) error {
+	if m.jailCalls != nil {
+		*m.jailCalls++
+	}
 	return nil
 }
 
@@ -67,6 +93,14 @@ func (m *mockSlashingKeeper) Jail(_ context.Context, _ sdk.ConsAddress) error {
 // ---------------------------------------------------------------------------
 
 func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
+	t.Helper()
+	k, ctx, _, _ := setupKeeperWithMocks(t, &mockStakingKeeper{}, &mockSlashingKeeper{})
+	return k, ctx
+}
+
+// setupKeeperWithMocks builds a keeper with caller-provided staking/slashing
+// mocks so tests can inspect enforcement behaviour.
+func setupKeeperWithMocks(t *testing.T, sk *mockStakingKeeper, slk *mockSlashingKeeper) (keeper.Keeper, sdk.Context, *mockStakingKeeper, *mockSlashingKeeper) {
 	t.Helper()
 	storeKey := storetypes.NewKVStoreKey("mevprotection")
 	db := dbm.NewMemDB()
@@ -81,8 +115,36 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	cdc := codec.NewProtoCodec(codectypes.NewInterfaceRegistry())
 	storeService := runtime.NewKVStoreService(storeKey)
 
-	k := keeper.NewKeeper(cdc, storeService, &mockStakingKeeper{}, &mockSlashingKeeper{}, &mockBankKeeper{}, "authority")
-	return k, ctx
+	k := keeper.NewKeeper(cdc, storeService, sk, slk, &mockBankKeeper{}, "authority")
+	return k, ctx, sk, slk
+}
+
+// commitRevealReorderedBlock sets up commit/reveal records with ascending
+// timestamps and returns a fully-reversed block ordering that CheckFairOrdering
+// flags as MEV (drift exceeds MaxTxDelay=1). Shared by MEV detection tests.
+func commitRevealReorderedBlock(t *testing.T, k keeper.Keeper, ctx sdk.Context) [][]byte {
+	t.Helper()
+	params := types.DefaultParams()
+	params.FairOrderConfig.MaxTxDelay = 1
+	require.NoError(t, k.SetParams(ctx, params))
+
+	bodies := make([][]byte, 3)
+	nonces := make([][]byte, 3)
+	hashes := make([][]byte, 3)
+	for i := 0; i < 3; i++ {
+		bodies[i] = []byte{byte('A' + i), byte(i), byte(i + 10)}
+		nonces[i] = []byte{byte(i + 100)}
+		hashes[i] = makeCommitHash(bodies[i], nonces[i])
+	}
+	for i := 0; i < 3; i++ {
+		ctxT := ctx.WithBlockTime(time.Unix(int64(1000+i*100), 0))
+		require.NoError(t, k.CommitTx(ctxT, validAddr(), hashes[i], []byte("enc")))
+	}
+	revealCtx := ctx.WithBlockHeight(20) // within reveal window [20,31]
+	for i := 0; i < 3; i++ {
+		require.NoError(t, k.RevealTx(revealCtx, validAddr(), hashes[i], bodies[i], nonces[i]))
+	}
+	return [][]byte{bodies[2], bodies[1], bodies[0]}
 }
 
 func validAddr() string {
@@ -145,8 +207,9 @@ func TestRevealTx_Valid(t *testing.T) {
 	// Commit first
 	require.NoError(t, k.CommitTx(ctx, validAddr(), hash, []byte("encrypted")))
 
-	// Reveal at the same height (within window)
-	err := k.RevealTx(ctx, validAddr(), hash, body, nonce)
+	// Default params: CommitWindow=20, RevealWindow=1 → reveal window is
+	// [10+20/2, 10+20+1] = [20, 31]. Reveal at height 20 (start of window).
+	err := k.RevealTx(ctx.WithBlockHeight(20), validAddr(), hash, body, nonce)
 	require.NoError(t, err)
 }
 
@@ -185,9 +248,9 @@ func TestRevealTx_Expired(t *testing.T) {
 	// Commit at height 10
 	require.NoError(t, k.CommitTx(ctx, validAddr(), hash, []byte("enc")))
 
-	// Default params: CommitWindow=3, RevealWindow=1, so maxRevealHeight = 10+3+1 = 14
-	// Move to height 15 (past the window)
-	futureCtx := ctx.WithBlockHeight(15)
+	// Default params: CommitWindow=20, RevealWindow=1, so maxRevealHeight = 10+20+1 = 31
+	// Move to height 32 (past the window)
+	futureCtx := ctx.WithBlockHeight(32)
 	err := k.RevealTx(futureCtx, validAddr(), hash, body, nonce)
 	require.ErrorIs(t, err, types.ErrRevealExpired)
 }
@@ -248,8 +311,8 @@ func TestGetPendingReveals(t *testing.T) {
 	hash2 := makeCommitHash(body2, nonce2)
 	require.NoError(t, k.CommitTx(ctx, validAddr(), hash2, []byte("enc2")))
 
-	// Reveal only the first one
-	require.NoError(t, k.RevealTx(ctx, validAddr(), hash1, body1, nonce1))
+	// Reveal only the first one (at height 20, within the reveal window [20,31])
+	require.NoError(t, k.RevealTx(ctx.WithBlockHeight(20), validAddr(), hash1, body1, nonce1))
 
 	// GetPendingReveals should return only the second (unrevealed) one
 	pending := k.GetPendingReveals(ctx)
@@ -287,8 +350,8 @@ func TestPruneExpiredCommits(t *testing.T) {
 	_, found := k.GetCommittedTx(ctx, hash)
 	require.True(t, found)
 
-	// Prune at a height past the reveal window (committed at 10, window = 3+1 = 4, so 15 is past)
-	futureCtx := ctx.WithBlockHeight(15)
+	// Prune at a height past the reveal window (committed at 10, window = 20+1 = 21, so 32 is past)
+	futureCtx := ctx.WithBlockHeight(32)
 	k.PruneExpiredCommits(futureCtx)
 
 	// Should be gone
@@ -434,9 +497,10 @@ func TestCheckFairOrdering_ValidOrdering(t *testing.T) {
 	ctx2 := ctx.WithBlockTime(time.Unix(2000, 0))
 	require.NoError(t, k.CommitTx(ctx2, validAddr(), hash2, []byte("enc2")))
 
-	// Reveal both
-	require.NoError(t, k.RevealTx(ctx, validAddr(), hash1, body1, nonce1))
-	require.NoError(t, k.RevealTx(ctx, validAddr(), hash2, body2, nonce2))
+	// Reveal both (at height 20, within the reveal window [20,31])
+	revealCtx := ctx.WithBlockHeight(20)
+	require.NoError(t, k.RevealTx(revealCtx, validAddr(), hash1, body1, nonce1))
+	require.NoError(t, k.RevealTx(revealCtx, validAddr(), hash2, body2, nonce2))
 
 	// Block with correct ordering (body1 first, body2 second)
 	err := k.CheckFairOrdering(ctx, [][]byte{body1, body2})
@@ -468,8 +532,9 @@ func TestCheckFairOrdering_MEVDetectedOnReordering(t *testing.T) {
 		require.NoError(t, k.CommitTx(ctxT, validAddr(), hashes[i], []byte("enc")))
 	}
 
+	revealCtx := ctx.WithBlockHeight(20)
 	for i := 0; i < 3; i++ {
-		require.NoError(t, k.RevealTx(ctx, validAddr(), hashes[i], bodies[i], nonces[i]))
+		require.NoError(t, k.RevealTx(revealCtx, validAddr(), hashes[i], bodies[i], nonces[i]))
 	}
 
 	// Reverse the order completely: [body2, body1, body0] -- drift = 2, exceeds MaxTxDelay=1
@@ -516,7 +581,8 @@ func TestGetAllRevealedTxs_DeterministicOrder(t *testing.T) {
 		commitHash := h.Sum(nil)
 
 		require.NoError(t, k.CommitTx(ctx, sender, commitHash, []byte("encrypted")))
-		require.NoError(t, k.RevealTx(ctx, sender, commitHash, tc.body, tc.nonce))
+		// Reveal at height 20, within the reveal window [20,31].
+		require.NoError(t, k.RevealTx(ctx.WithBlockHeight(20), sender, commitHash, tc.body, tc.nonce))
 	}
 
 	results := k.GetAllRevealedTxs(ctx)
@@ -573,4 +639,84 @@ func TestGetPendingReveals_DeterministicOrder(t *testing.T) {
 				"iteration %d: pending[%d] hash differs", iter, i)
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// DetectMEV solo-validator safety guard
+// ---------------------------------------------------------------------------
+
+// TestDetectMEV_SkipsSlashingWhenTooFewValidators proves that when the bonded
+// validator count is below the safety threshold, DetectMEV records the penalty
+// but does NOT slash or jail the proposer — protecting a low-validator-count
+// chain from being halted by its own MEV enforcement.
+func TestDetectMEV_SkipsSlashingWhenTooFewValidators(t *testing.T) {
+	slashCalls := 0
+	jailCalls := 0
+	sk := &mockStakingKeeper{bondedCount: 1, slashCalls: &slashCalls}
+	slk := &mockSlashingKeeper{jailCalls: &jailCalls}
+	k, ctx, _, _ := setupKeeperWithMocks(t, sk, slk)
+
+	reordered := commitRevealReorderedBlock(t, k, ctx)
+
+	penalty, err := k.DetectMEV(ctx, reordered)
+	require.NoError(t, err)
+	// A penalty is still recorded as evidence...
+	require.NotNil(t, penalty)
+	require.Equal(t, "reordering", penalty.PenaltyType)
+	// ...but the validator set must NOT be touched.
+	require.Equal(t, 0, slashCalls, "must not slash when validator count below threshold")
+	require.Equal(t, 0, jailCalls, "must not jail when validator count below threshold")
+}
+
+// TestDetectMEV_SkipsSlashingWhenJailingDropsBelowThreshold proves the guard
+// also fires when the bonded count equals the threshold, since jailing the
+// proposer would drop the active set below the safe minimum.
+func TestDetectMEV_SkipsSlashingWhenJailingDropsBelowThreshold(t *testing.T) {
+	slashCalls := 0
+	jailCalls := 0
+	sk := &mockStakingKeeper{bondedCount: 4, slashCalls: &slashCalls}
+	slk := &mockSlashingKeeper{jailCalls: &jailCalls}
+	k, ctx, _, _ := setupKeeperWithMocks(t, sk, slk)
+
+	reordered := commitRevealReorderedBlock(t, k, ctx)
+
+	penalty, err := k.DetectMEV(ctx, reordered)
+	require.NoError(t, err)
+	require.NotNil(t, penalty)
+	require.Equal(t, 0, slashCalls, "must not slash when jailing would drop below threshold")
+	require.Equal(t, 0, jailCalls, "must not jail when jailing would drop below threshold")
+}
+
+// TestDetectMEV_SlashesWhenEnoughValidators confirms enforcement still runs
+// when the validator set is comfortably above the safety threshold.
+func TestDetectMEV_SlashesWhenEnoughValidators(t *testing.T) {
+	slashCalls := 0
+	jailCalls := 0
+	sk := &mockStakingKeeper{bondedCount: 10, slashCalls: &slashCalls}
+	slk := &mockSlashingKeeper{jailCalls: &jailCalls}
+	k, ctx, _, _ := setupKeeperWithMocks(t, sk, slk)
+
+	reordered := commitRevealReorderedBlock(t, k, ctx)
+
+	penalty, err := k.DetectMEV(ctx, reordered)
+	require.NoError(t, err)
+	require.NotNil(t, penalty)
+	require.Equal(t, 1, slashCalls, "should slash when validator count is safely above threshold")
+	require.Equal(t, 1, jailCalls, "should jail when validator count is safely above threshold")
+}
+
+// TestDetectMEV_NoViolationReturnsNil confirms DetectMEV is a no-op when there
+// is no MEV violation.
+func TestDetectMEV_NoViolationReturnsNil(t *testing.T) {
+	slashCalls := 0
+	jailCalls := 0
+	sk := &mockStakingKeeper{bondedCount: 10, slashCalls: &slashCalls}
+	slk := &mockSlashingKeeper{jailCalls: &jailCalls}
+	k, ctx, _, _ := setupKeeperWithMocks(t, sk, slk)
+
+	penalty, err := k.DetectMEV(ctx, [][]byte{[]byte("only-one-tx")})
+	require.NoError(t, err)
+	require.Nil(t, penalty)
+	require.Equal(t, 0, slashCalls)
+	require.Equal(t, 0, jailCalls)
 }

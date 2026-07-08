@@ -20,18 +20,21 @@ func testAddr5() string {
 // helper: create a pool and fund the module account for swap outputs.
 func setupPoolForCopyTrade(t *testing.T, k keeper.Keeper, ctx sdk.Context, bk *mockBankKeeper) (uint64, string) {
 	t.Helper()
+	// Deep pool (1B/1B): leader trades of a few million move the spot price only
+	// fractionally, so the follower's front-running guard (MaxFollowerSlippageBps)
+	// does not reject the copy. Copied amounts still clear MinCopyTradeAmount.
 	creator := testAddr()
 	bk.fundAccount(creator, sdk.NewCoins(
-		sdk.NewInt64Coin("usyreen", 100_000_000),
-		sdk.NewInt64Coin("uusdc", 100_000_000),
+		sdk.NewInt64Coin("usyreen", 1_000_000_000),
+		sdk.NewInt64Coin("uusdc", 1_000_000_000),
 	))
-	poolID, err := k.CreatePool(ctx, creator, "usyreen", "uusdc", math.NewInt(100_000_000), math.NewInt(100_000_000))
+	poolID, err := k.CreatePool(ctx, creator, "usyreen", "uusdc", math.NewInt(1_000_000_000), math.NewInt(1_000_000_000))
 	require.NoError(t, err)
 
 	// Fund module account so swaps can send output tokens
 	bk.balances[types.ModuleName] = bk.balances[types.ModuleName].Add(
-		sdk.NewCoin("usyreen", math.NewInt(100_000_000)),
-		sdk.NewCoin("uusdc", math.NewInt(100_000_000)),
+		sdk.NewCoin("usyreen", math.NewInt(1_000_000_000)),
+		sdk.NewCoin("uusdc", math.NewInt(1_000_000_000)),
 	)
 	return poolID, creator
 }
@@ -218,21 +221,22 @@ func TestCopyTradeExecution(t *testing.T) {
 	trader := testAddr2()
 	follower := testAddr3()
 
-	// Follower follows trader with 50% copy ratio
-	err := k.FollowTrader(ctx, follower, trader, math.NewInt(1_000_000), math.NewInt(10_000_000), 5000)
+	// Follower follows trader with 50% copy ratio. MaxPerTrade is set above the
+	// MinCopyTradeAmount (1 token) so the copied amount clears the anti-dust floor.
+	err := k.FollowTrader(ctx, follower, trader, math.NewInt(5_000_000), math.NewInt(50_000_000), 5000)
 	require.NoError(t, err)
 
 	// Fund trader for the swap
-	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1_000_000)))
+	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10_000_000)))
 
-	// Fund follower for the copy trade (50% of 1M = 500k)
-	bk.fundAccount(follower, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1_000_000)))
+	// Fund follower for the copy trade (50% of 4M = 2M, above the 1-token minimum)
+	bk.fundAccount(follower, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10_000_000)))
 
 	// Record follower balance before
 	followerUusdcBefore := bk.getBalance(follower, "uusdc")
 
 	// Trader swaps (this automatically calls RecordTradeForCopyTrading)
-	tokenOut, err := k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 1_000_000), math.ZeroInt())
+	tokenOut, err := k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 4_000_000), math.ZeroInt())
 	require.NoError(t, err)
 	require.True(t, tokenOut.Amount.IsPositive())
 
@@ -246,7 +250,7 @@ func TestCopyTradeExecution(t *testing.T) {
 
 	// Verify follower spent some usyreen
 	followerUsyreenAfter := bk.getBalance(follower, "usyreen")
-	require.True(t, followerUsyreenAfter.LT(math.NewInt(1_000_000)), "follower should have spent usyreen")
+	require.True(t, followerUsyreenAfter.LT(math.NewInt(10_000_000)), "follower should have spent usyreen")
 
 	// Verify settings updated (spent, lastCopyAt)
 	settings, exists := k.GetCopySettings(ctx, follower, trader)
@@ -312,7 +316,8 @@ func TestCopyTradeCooldown(t *testing.T) {
 	trader := testAddr2()
 	follower := testAddr3()
 
-	err := k.FollowTrader(ctx, follower, trader, math.NewInt(1_000_000), math.NewInt(50_000_000), 5000)
+	// MaxPerTrade above MinCopyTradeAmount so each 50% copy clears the dust floor.
+	err := k.FollowTrader(ctx, follower, trader, math.NewInt(5_000_000), math.NewInt(50_000_000), 5000)
 	require.NoError(t, err)
 
 	// Fund accounts generously
@@ -320,7 +325,7 @@ func TestCopyTradeCooldown(t *testing.T) {
 	bk.fundAccount(follower, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10_000_000)))
 
 	// First trade at block 100
-	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 1_000_000), math.ZeroInt())
+	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 4_000_000), math.ZeroInt())
 	require.NoError(t, err)
 	k.ProcessCopyTrades(ctx)
 
@@ -331,8 +336,8 @@ func TestCopyTradeCooldown(t *testing.T) {
 
 	// Second trade at block 101 (only 1 block later, cooldown is 2)
 	ctx = ctx.WithBlockHeader(cmtproto.Header{Height: 101})
-	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1_000_000)))
-	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 1_000_000), math.ZeroInt())
+	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 4_000_000)))
+	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 4_000_000), math.ZeroInt())
 	require.NoError(t, err)
 	k.ProcessCopyTrades(ctx)
 
@@ -342,8 +347,8 @@ func TestCopyTradeCooldown(t *testing.T) {
 
 	// Third trade at block 102 (2 blocks later, cooldown satisfied)
 	ctx = ctx.WithBlockHeader(cmtproto.Header{Height: 102})
-	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1_000_000)))
-	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 1_000_000), math.ZeroInt())
+	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 4_000_000)))
+	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 4_000_000), math.ZeroInt())
 	require.NoError(t, err)
 	k.ProcessCopyTrades(ctx)
 
@@ -437,15 +442,16 @@ func TestCopyTradeLog(t *testing.T) {
 	trader := testAddr2()
 	follower := testAddr3()
 
-	err := k.FollowTrader(ctx, follower, trader, math.NewInt(1_000_000), math.NewInt(50_000_000), 5000)
+	// MaxPerTrade above MinCopyTradeAmount so the 50% copy clears the dust floor.
+	err := k.FollowTrader(ctx, follower, trader, math.NewInt(5_000_000), math.NewInt(50_000_000), 5000)
 	require.NoError(t, err)
 
 	// Fund accounts
-	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1_000_000)))
-	bk.fundAccount(follower, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1_000_000)))
+	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10_000_000)))
+	bk.fundAccount(follower, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10_000_000)))
 
 	// Trader swaps
-	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 1_000_000), math.ZeroInt())
+	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 4_000_000), math.ZeroInt())
 	require.NoError(t, err)
 	k.ProcessCopyTrades(ctx)
 
@@ -471,19 +477,23 @@ func TestCopyTradeLog(t *testing.T) {
 func TestAutoUnfollow(t *testing.T) {
 	k, ctx, bk, _ := setupKeeper(t)
 
-	// Create a heavily imbalanced pool so a single big swap drives PnL well
-	// past -50% (the M10-tightened auto-unfollow threshold).
+	// A single legal swap can never drive realized PnL past the M10 -50%
+	// auto-unfollow threshold: the DEX caps swap input at 30% of the reserve,
+	// and a 30%-of-reserve constant-product swap tops out around -23% PnL.
+	// Reaching -50% would require a ~100%-of-reserve swap, which the cap forbids.
+	// So we drive the trader's cumulative PnL below the threshold directly
+	// (simulating a long losing streak) and verify the auto-unfollow sweep runs.
 	creator := testAddr()
 	bk.fundAccount(creator, sdk.NewCoins(
 		sdk.NewInt64Coin("usyreen", 100_000_000),
-		sdk.NewInt64Coin("uusdc", 10_000_000),
+		sdk.NewInt64Coin("uusdc", 100_000_000),
 	))
-	poolID, err := k.CreatePool(ctx, creator, "usyreen", "uusdc", math.NewInt(100_000_000), math.NewInt(10_000_000))
+	poolID, err := k.CreatePool(ctx, creator, "usyreen", "uusdc", math.NewInt(100_000_000), math.NewInt(100_000_000))
 	require.NoError(t, err)
 
 	bk.balances[types.ModuleName] = bk.balances[types.ModuleName].Add(
 		sdk.NewCoin("usyreen", math.NewInt(100_000_000)),
-		sdk.NewCoin("uusdc", math.NewInt(10_000_000)),
+		sdk.NewCoin("uusdc", math.NewInt(100_000_000)),
 	)
 
 	trader := testAddr2()
@@ -491,26 +501,30 @@ func TestAutoUnfollow(t *testing.T) {
 	follower2 := testAddr4()
 
 	// Two followers follow the trader
-	err = k.FollowTrader(ctx, follower, trader, math.NewInt(1_000_000), math.NewInt(50_000_000), 5000)
+	err = k.FollowTrader(ctx, follower, trader, math.NewInt(5_000_000), math.NewInt(50_000_000), 5000)
 	require.NoError(t, err)
-	err = k.FollowTrader(ctx, follower2, trader, math.NewInt(1_000_000), math.NewInt(50_000_000), 5000)
+	err = k.FollowTrader(ctx, follower2, trader, math.NewInt(5_000_000), math.NewInt(50_000_000), 5000)
 	require.NoError(t, err)
 
 	// Verify 2 followers
 	followers := k.GetFollowers(ctx, trader)
 	require.Len(t, followers, 2)
 
-	// Swap 100M usyreen into a 100M/10M pool. Output is ~5M uusdc, so PnL
-	// (in input units, normalized via the pool spot price) is deeply
-	// negative — well past -50% in bps terms.
-	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100_000_000)))
-	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 100_000_000), math.ZeroInt())
+	// A legal (<=30% cap) swap registers trader stats AND enqueues a pending
+	// copy trade, so ProcessCopyTrades reaches the auto-unfollow sweep.
+	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 10_000_000)))
+	_, err = k.Swap(ctx, trader, poolID, sdk.NewInt64Coin("usyreen", 4_000_000), math.ZeroInt())
 	require.NoError(t, err)
 
-	// Check trader stats PnL is deeply negative
+	// Override cumulative PnL to sit well below -50% (-5000 bps), as would happen
+	// after a sustained losing streak.
 	stats, found := k.GetTraderStats(ctx, trader)
 	require.True(t, found)
-	require.True(t, stats.TotalPnL.IsNegative(), "PnL should be negative after large swap")
+	stats.TotalVolume = math.NewInt(10_000_000)
+	stats.TotalPnL = math.NewInt(-6_000_000) // -60% => -6000 bps
+	k.SetTraderStats(ctx, stats)
+
+	require.True(t, stats.TotalPnL.IsNegative(), "PnL should be negative")
 
 	// PnL in bps: (pnl / volume) * 10000
 	pnlBps := stats.TotalPnL.MulRaw(10000).Quo(stats.TotalVolume).Int64()

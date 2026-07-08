@@ -456,11 +456,13 @@ func TestSwapInsufficientLiquidity(t *testing.T) {
 		sdk.NewCoin("uusdc", math.NewInt(1_000_000)),
 	)
 
-	// Try to swap a tiny amount (1 unit) - output will be ~0 after fees
+	// Try to swap a tiny amount (1 unit). The pool is well funded, so this is
+	// NOT an insufficient-liquidity case: the input rounds to zero after fees
+	// and is correctly rejected by the dust guard before any output is computed.
 	bk.fundAccount(trader, sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1)))
 	tokenIn := sdk.NewInt64Coin("usyreen", 1)
 	_, err = k.Swap(ctx, trader, poolID, tokenIn, math.ZeroInt())
-	require.ErrorIs(t, err, types.ErrInsufficientLiquidity)
+	require.ErrorContains(t, err, "swap amount too small after fees")
 }
 
 // ---------------------------------------------------------------------------

@@ -233,6 +233,13 @@ func (k Keeper) CheckFairOrdering(ctx context.Context, blockTxs [][]byte) error 
 	return nil
 }
 
+// minBondedValidatorsForSlashing is the minimum number of bonded (active)
+// validators that must remain AFTER a proposer is jailed for MEV slashing to
+// proceed. It protects low-validator-count / solo-validator chains from being
+// halted by their own MEV enforcement. Slashing/jailing is skipped (with a
+// warning) whenever the bonded set is at or below this threshold.
+const minBondedValidatorsForSlashing = 4
+
 // DetectMEV checks for suspicious reordering patterns in a block.
 // When a violation is found it records a penalty AND slashes the proposer validator.
 func (k Keeper) DetectMEV(ctx context.Context, blockTxs [][]byte) (*types.MEVPenalty, error) {
@@ -269,6 +276,32 @@ func (k Keeper) DetectMEV(ctx context.Context, blockTxs [][]byte) (*types.MEVPen
 	}
 	if setErr := kvStore.Set(types.PenaltyKey(penalty.ValidatorAddr, penalty.BlockHeight), bz); setErr != nil {
 		return nil, setErr
+	}
+
+	// Solo/low-validator-count safety guard.
+	// Slashing and (especially) jailing the block proposer can remove a validator
+	// from the active set. On a chain with very few validators this can drop the
+	// bonded set below what is needed to keep producing blocks, halting the chain.
+	// Before touching the validator set at all, verify there are enough bonded
+	// validators to absorb one being jailed. If not, record the penalty (already
+	// stored above) but skip slashing + jailing and log a warning instead.
+	bondedVals, bondedErr := k.stakingKeeper.GetBondedValidatorsByPower(ctx)
+	if bondedErr != nil {
+		// Defensive: if we cannot determine the validator count, do not risk
+		// halting the chain — skip slashing/jailing.
+		k.Logger(ctx).Warn("MEV slashing skipped: unable to count bonded validators",
+			"validator", consAddr.String(), "err", bondedErr)
+		return penalty, nil
+	}
+	bondedCount := len(bondedVals)
+	if bondedCount < minBondedValidatorsForSlashing || bondedCount-1 < minBondedValidatorsForSlashing {
+		k.Logger(ctx).Warn("MEV slashing skipped: too few bonded validators to safely slash/jail",
+			"validator", consAddr.String(),
+			"bonded_validators", bondedCount,
+			"threshold", minBondedValidatorsForSlashing,
+			"height", penalty.BlockHeight,
+		)
+		return penalty, nil
 	}
 
 	// Determine slash fraction from params (default 5%)

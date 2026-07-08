@@ -194,6 +194,12 @@ func TestRiskEngine_VolumeLimit(t *testing.T) {
 	err := k.CheckSwapRisk(ctx, 1, math.NewInt(100000000000))
 	require.NoError(t, err)
 
+	// CheckSwapRisk is read-only (audit fix H*: failed swaps must not inflate
+	// the per-block counter). Production records the volume only after the swap
+	// succeeds, via RecordSwapVolume — simulate that here so the counter carries
+	// over to the next check.
+	k.RecordSwapVolume(ctx, 1, math.NewInt(100000000000))
+
 	// Second swap that exceeds per-block limit — should fail
 	err = k.CheckSwapRisk(ctx, 1, math.NewInt(500000000000))
 	require.Error(t, err)

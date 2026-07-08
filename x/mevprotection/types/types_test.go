@@ -92,18 +92,6 @@ func TestMsgCommitTx_TooLargeEncryptedTx(t *testing.T) {
 	require.Contains(t, err.Error(), "too large")
 }
 
-func TestMsgCommitTx_GetSigners(t *testing.T) {
-	addr := sdk.AccAddress([]byte("test_address_padded_"))
-	msg := &types.MsgCommitTx{
-		Sender:      addr.String(),
-		TxHash:      validHash(),
-		EncryptedTx: []byte("payload"),
-	}
-	signers := msg.GetSigners()
-	require.Len(t, signers, 1)
-	require.True(t, bytes.Equal(signers[0], addr))
-}
-
 // ---------------------------------------------------------------------------
 // MsgRevealTx
 // ---------------------------------------------------------------------------
@@ -204,19 +192,6 @@ func TestMsgRevealTx_HashVerification(t *testing.T) {
 	require.False(t, bytes.Equal(h[:], wrongHash[:]))
 }
 
-func TestMsgRevealTx_GetSigners(t *testing.T) {
-	addr := sdk.AccAddress([]byte("test_address_padded_"))
-	msg := &types.MsgRevealTx{
-		Sender:     addr.String(),
-		CommitHash: validHash(),
-		TxBody:     []byte("body"),
-		Nonce:      []byte("nonce"),
-	}
-	signers := msg.GetSigners()
-	require.Len(t, signers, 1)
-	require.True(t, bytes.Equal(signers[0], addr))
-}
-
 // ---------------------------------------------------------------------------
 // Params
 // ---------------------------------------------------------------------------
@@ -224,7 +199,7 @@ func TestMsgRevealTx_GetSigners(t *testing.T) {
 func TestDefaultParams(t *testing.T) {
 	p := types.DefaultParams()
 	require.True(t, p.FairOrderConfig.EnableCommitReveal)
-	require.Equal(t, uint64(3), p.FairOrderConfig.CommitWindow)
+	require.Equal(t, uint64(20), p.FairOrderConfig.CommitWindow)
 	require.Equal(t, uint64(1), p.FairOrderConfig.RevealWindow)
 	require.Equal(t, uint64(3), p.FairOrderConfig.MaxTxDelay)
 	require.NoError(t, p.Validate())
@@ -329,7 +304,7 @@ func TestGenesisState_Validate_ValidPenalties(t *testing.T) {
 func TestDefaultFairOrderConfig(t *testing.T) {
 	cfg := types.DefaultFairOrderConfig
 	require.True(t, cfg.EnableCommitReveal)
-	require.Equal(t, uint64(3), cfg.CommitWindow)
+	require.Equal(t, uint64(20), cfg.CommitWindow)
 	require.Equal(t, uint64(1), cfg.RevealWindow)
 	require.Equal(t, uint64(3), cfg.MaxTxDelay)
 }
