@@ -29,6 +29,20 @@ func (k *Keeper) tryCrossChainSwap(ctx context.Context, intent types.Intent) err
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
+	// This runs inside ExecuteTradingIntents in BeginBlock. A cross_chain_swap
+	// body with a nil/non-positive input_amount would make sdk.NewCoin below
+	// PANIC (nil amount fails Coin.Validate) — halting the chain. Chain-step
+	// intents skip SubmitIntent's validateIntentBody, so guard here too. Fail
+	// the intent instead of trusting the stored body.
+	if body.InputAmount.IsNil() || !body.InputAmount.IsPositive() {
+		intent.Status = types.StatusFailed
+		k.SetIntent(ctx, intent)
+		k.refundIntentFees(ctx, intent)
+		k.refundTradingTokens(ctx, intent)
+		k.FailChainIfLinked(ctx, intent)
+		return fmt.Errorf("cross_chain_swap intent has invalid input amount")
+	}
+
 	// Phase 1: Execute local DEX swap (if not already done)
 	if !body.SwapDone {
 		moduleAddr := k.accountKeeper.GetModuleAddress(types.ModuleName)

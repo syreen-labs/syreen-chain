@@ -274,6 +274,15 @@ func (k *Keeper) submitChainStepIntent(ctx context.Context, creator string, inte
 	}
 	expiry := sdkCtx.BlockHeight() + int64(expiryBlocks)
 
+	// Chain steps bypass the SubmitIntent msg handler, so they never went
+	// through validateIntentBody. Without this, a step body with a nil/invalid
+	// amount (e.g. cross_chain_swap input_amount) is persisted and later panics
+	// a BeginBlock execution path (sdk.NewCoin nil) → permanent chain halt.
+	// Validate every step body before persisting it.
+	if err := validateIntentBody(intentType, body); err != nil {
+		return "", fmt.Errorf("invalid chain step body: %w", err)
+	}
+
 	intentID := k.nextIntentID(ctx)
 
 	intent := types.Intent{

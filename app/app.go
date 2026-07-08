@@ -209,7 +209,7 @@ var (
 		portfoliotypes.ModuleName:        nil,
 		optionstypes.ModuleName:          nil,
 		aiagenttypes.ModuleName:          nil,
-		mevprotectiontypes.ModuleName:    {authtypes.Minter},
+		mevprotectiontypes.ModuleName:    nil, // fairness pool only holds/sends real coins; no mint (least privilege)
 	}
 )
 
@@ -1353,6 +1353,19 @@ func NewSyreenApp(
 		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			sdkCtx := sdk.UnwrapSDKContext(ctx)
 			logger.Info("applying v2.4.2 upgrade: intent swap-settlement decode + expiry-margin fixes", "height", sdkCtx.BlockHeight())
+			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
+
+	// v2.4.3: security-audit fix. Closes a CRITICAL single-tx permanent chain
+	// halt — a chain-step cross_chain_swap with a nil input_amount bypassed
+	// validateIntentBody and panicked sdk.NewCoin in BeginBlock. Fix is pure
+	// execution logic (chain-step body validation + tryCrossChainSwap nil guard);
+	// no state migration required.
+	app.UpgradeKeeper.SetUpgradeHandler("v2.4.3",
+		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			logger.Info("applying v2.4.3 upgrade: intent chain-step validation + cross_chain nil-guard (chain-halt fix)", "height", sdkCtx.BlockHeight())
 			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
 		},
 	)

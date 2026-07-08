@@ -316,3 +316,92 @@ func TestCrossChainSwap_InChain(t *testing.T) {
 	require.Len(t, transfer.calls, 1)
 	require.Equal(t, "cosmos1xyz", transfer.calls[0].Receiver)
 }
+
+// TestCrossChainSwap_NilInputAmount_NoHalt is the regression test for the
+// CRITICAL single-tx chain-halt found in the Jul-8 security audit: a
+// cross_chain_swap body with a nil/omitted input_amount, persisted via the
+// chain-step path (which bypassed validateIntentBody), reached
+// tryCrossChainSwap in BeginBlock and panicked at sdk.NewCoin(denom, nil)
+// ("amount is nil") — an unrecoverable halt. The tryCrossChainSwap nil guard
+// must now fail the intent instead of panicking.
+func TestCrossChainSwap_NilInputAmount_NoHalt(t *testing.T) {
+	k, ctx, dex, transfer := setupCrossChainKeeper(t)
+
+	// Exact attack payload: valid JSON, input_amount omitted -> nil math.Int.
+	poisonBody := json.RawMessage(`{
+		"input_denom":"usyreen",
+		"output_denom":"ibc/ATOM",
+		"min_output_amount":"0",
+		"pool_id":1,
+		"ibc_source_port":"transfer",
+		"ibc_source_channel":"channel-0",
+		"receiver":"cosmos1abc123",
+		"timeout_blocks":100
+	}`)
+
+	intent := types.Intent{
+		ID:         "1",
+		Creator:    creatorAddr,
+		IntentType: types.IntentTypeCrossChainSwap,
+		Body:       poisonBody,
+		MaxFee:     sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1000)),
+		Tip:        sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		Expiry:     100,
+		Status:     types.StatusPending,
+		CreatedAt:  1,
+	}
+	k.SetIntent(ctx, intent)
+
+	// BeginBlock trading execution must NOT panic on the poisoned intent.
+	require.NotPanics(t, func() { k.ExecuteTradingIntents(ctx) })
+
+	// The intent must be failed, and no swap/transfer should have fired.
+	updated, found := k.GetIntent(ctx, "1")
+	require.True(t, found)
+	require.Equal(t, types.StatusFailed, updated.Status)
+	require.Len(t, dex.swapCalls, 0)
+	require.Len(t, transfer.calls, 0)
+}
+
+// TestSubmitChainStep_RejectsNilInputAmount proves the primary fix: the
+// chain-step submission path now runs validateIntentBody, so a chain whose
+// step-0 cross_chain_swap body has a nil input_amount is rejected at submit
+// time and never persisted (the poisoned intent can't reach BeginBlock).
+func TestSubmitChainStep_RejectsNilInputAmount(t *testing.T) {
+	k, ctx, _, _ := setupCrossChainKeeper(t)
+
+	poisonStep := types.ChainStep{
+		IntentType: types.IntentTypeCrossChainSwap,
+		Body: json.RawMessage(`{
+			"input_denom":"usyreen",
+			"output_denom":"ibc/ATOM",
+			"pool_id":1,
+			"ibc_source_port":"transfer",
+			"ibc_source_channel":"channel-0",
+			"receiver":"cosmos1abc123",
+			"timeout_blocks":100
+		}`),
+		Condition: types.ChainCondition{Type: types.ConditionImmediate},
+	}
+	// A benign second step so ValidateBasic's >=2-steps check passes.
+	step1 := limitSellStepFromPrevious(1, "usyreen", "2.0", types.ChainCondition{
+		Type:           types.ConditionPriceAbove,
+		PriceTarget:    math.LegacyMustNewDecFromStr("2.0"),
+		PriceDenom:     "ibc/ATOM",
+		PriceBaseDenom: "usyreen",
+		PoolID:         1,
+	})
+
+	msg := &types.MsgSubmitChain{
+		Creator:      creatorAddr,
+		Steps:        []types.ChainStep{poisonStep, step1},
+		MaxFee:       sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1000)),
+		Tip:          sdk.NewCoins(sdk.NewInt64Coin("usyreen", 100)),
+		ExpiryBlocks: 500,
+	}
+
+	require.NotPanics(t, func() {
+		_, err := k.SubmitChain(ctx, msg)
+		require.Error(t, err)
+	})
+}
