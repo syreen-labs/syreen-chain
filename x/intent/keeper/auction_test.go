@@ -258,6 +258,13 @@ func TestSlashing_DeactivatesWhenBelowMinStake(t *testing.T) {
 
 func TestAutoFulfillIntents_FulfillsAfterSolvingWindow(t *testing.T) {
 	k, ctx := setupKeeper(t)
+
+	// Pin SolvingWindow=10 (the module default is larger) so the window closes at
+	// block 11 while the intent (expiry 51) is still live.
+	swParams := k.GetParams(ctx)
+	swParams.SolvingWindow = 10
+	require.NoError(t, k.SetParams(ctx, swParams))
+
 	intentID := registerSolverAndIntent(t, k, ctx)
 
 	// Submit solution
@@ -288,6 +295,12 @@ func TestAutoFulfillIntents_FulfillsAfterSolvingWindow(t *testing.T) {
 
 func TestAutoFulfillIntents_ExpiresWhenNoSolutions(t *testing.T) {
 	k, ctx := setupKeeper(t)
+
+	// Pin SolvingWindow=10 (the module default is larger) so the window closes at
+	// block 11 and block 12 is past it.
+	swParams := k.GetParams(ctx)
+	swParams.SolvingWindow = 10
+	require.NoError(t, k.SetParams(ctx, swParams))
 
 	// Submit intent
 	intentID, err := k.SubmitIntent(ctx, &types.MsgSubmitIntent{

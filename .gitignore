@@ -9,3 +9,4 @@ release/
 *.ign
 build/
 syreend
+syreend-v*

@@ -124,6 +124,17 @@ func registerProtoFileDescriptors() {
 				},
 			},
 			{Name: sp("MsgCancelStrategyResponse")},
+			// MsgUpdateParams carries the "authority" string field so the
+			// dynamicpb-based custom signer resolver (see app/encoding.go) can
+			// locate it by name; params is a bytes field (JSON-encoded Params).
+			{
+				Name: sp("MsgUpdateParams"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					fdStringField(1, "authority"),
+					fdBytesField(2, "params"),
+				},
+			},
+			{Name: sp("MsgUpdateParamsResponse")},
 		},
 		Service: []*descriptorpb.ServiceDescriptorProto{
 			{
@@ -139,6 +150,7 @@ func registerProtoFileDescriptors() {
 					{Name: sp("CancelChain"), InputType: sp(".syreen.intent.MsgCancelChain"), OutputType: sp(".syreen.intent.MsgCancelChainResponse")},
 					{Name: sp("CreateStrategy"), InputType: sp(".syreen.intent.MsgCreateStrategy"), OutputType: sp(".syreen.intent.MsgCreateStrategyResponse")},
 					{Name: sp("CancelStrategy"), InputType: sp(".syreen.intent.MsgCancelStrategy"), OutputType: sp(".syreen.intent.MsgCancelStrategyResponse")},
+					{Name: sp("UpdateParams"), InputType: sp(".syreen.intent.MsgUpdateParams"), OutputType: sp(".syreen.intent.MsgUpdateParamsResponse")},
 				},
 			},
 		},
@@ -222,6 +234,19 @@ func fdStringField(num int32, name string) *descriptorpb.FieldDescriptorProto {
 
 func fdUint64Field(num int32, name string) *descriptorpb.FieldDescriptorProto {
 	t := descriptorpb.FieldDescriptorProto_TYPE_UINT64
+	l := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
+	n := num
+	return &descriptorpb.FieldDescriptorProto{
+		Name:     sp(name),
+		Number:   &n,
+		Type:     &t,
+		Label:    &l,
+		JsonName: sp(toLowerCamel(name)),
+	}
+}
+
+func fdBytesField(num int32, name string) *descriptorpb.FieldDescriptorProto {
+	t := descriptorpb.FieldDescriptorProto_TYPE_BYTES
 	l := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
 	n := num
 	return &descriptorpb.FieldDescriptorProto{

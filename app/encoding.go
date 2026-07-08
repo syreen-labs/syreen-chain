@@ -228,6 +228,7 @@ func MakeEncodingConfig() EncodingConfig {
 		{"syreen.intent.MsgCancelChain", "creator"},
 		{"syreen.intent.MsgCreateStrategy", "creator"},
 		{"syreen.intent.MsgCancelStrategy", "creator"},
+		{"syreen.intent.MsgUpdateParams", "authority"},
 	} {
 		p := pair
 		signingOpts.DefineCustomGetSigners(

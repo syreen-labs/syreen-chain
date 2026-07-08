@@ -165,6 +165,28 @@ func (m msgServer) CreateStrategy(ctx context.Context, msg *types.MsgCreateStrat
 	return &types.MsgCreateStrategyResponse{StrategyID: strategyID, ChainID: chainID}, nil
 }
 
+func (m msgServer) UpdateParams(ctx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if !syreenconfig.IsModuleEnabled("intent") {
+		return nil, syreenconfig.ErrModuleDisabled("intent")
+	}
+	// Only the gov module authority may update params.
+	if msg.Authority != m.Keeper.GetAuthority() {
+		return nil, fmt.Errorf("invalid authority: expected %s, got %s", m.Keeper.GetAuthority(), msg.Authority)
+	}
+	if err := msg.Params.Validate(); err != nil {
+		return nil, err
+	}
+	if err := m.Keeper.SetParams(ctx, msg.Params); err != nil {
+		return nil, err
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+		"update_params",
+		sdk.NewAttribute("authority", msg.Authority),
+	))
+	return &types.MsgUpdateParamsResponse{}, nil
+}
+
 func (m msgServer) CancelStrategy(ctx context.Context, msg *types.MsgCancelStrategy) (*types.MsgCancelStrategyResponse, error) {
 	if !syreenconfig.IsModuleEnabled("intent") {
 		return nil, syreenconfig.ErrModuleDisabled("intent")

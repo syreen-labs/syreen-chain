@@ -18,6 +18,7 @@ func RegisterInterfaces(registry types.InterfaceRegistry) {
 		&MsgCancelChain{},
 		&MsgCreateStrategy{},
 		&MsgCancelStrategy{},
+		&MsgUpdateParams{},
 	)
 }
 

@@ -11,7 +11,7 @@ import (
 // Default parameter values
 var (
 	DefaultMinSolverStake        = sdk.NewCoin("usyreen", math.NewInt(1000000000)) // 1000 SYR
-	DefaultSolvingWindow         = uint64(10)
+	DefaultSolvingWindow         = uint64(100)
 	DefaultMaxSolutionsPerIntent = uint64(20)
 	DefaultSolverSlashFraction   = math.LegacyNewDecWithPrec(10, 2) // 10%
 	// DefaultIntentExpiryBlocks was originally 200 which was far too short

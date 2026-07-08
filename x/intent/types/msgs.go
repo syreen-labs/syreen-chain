@@ -251,6 +251,37 @@ func (m *MsgCancelIntentResponse) Reset()                  { *m = MsgCancelInten
 func (m *MsgCancelIntentResponse) String() string          { return "cancel_intent_response" }
 func (m *MsgCancelIntentResponse) XXX_MessageName() string { return "syreen.intent.MsgCancelIntentResponse" }
 
+// --- MsgUpdateParams ---
+
+// MsgUpdateParams is the standard Cosmos gov param-update message for the intent
+// module. Only the gov module authority may execute it. The Params are carried
+// on the wire as JSON bytes (see intent_proto.go Marshal/Unmarshal) because
+// Params is a plain-JSON struct in this module, mirroring how the query
+// responses hand-roll complex fields as JSON bytes.
+type MsgUpdateParams struct {
+	Authority string `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority"`
+	Params    Params `protobuf:"bytes,2,opt,name=params,proto3" json:"params"`
+}
+
+func (m *MsgUpdateParams) ProtoMessage()           {}
+func (m *MsgUpdateParams) Reset()                  { *m = MsgUpdateParams{} }
+func (m *MsgUpdateParams) String() string          { return fmt.Sprintf("update_params: authority=%s", m.Authority) }
+func (m *MsgUpdateParams) XXX_MessageName() string { return "syreen.intent.MsgUpdateParams" }
+
+func (m *MsgUpdateParams) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	return m.Params.Validate()
+}
+
+type MsgUpdateParamsResponse struct{}
+
+func (m *MsgUpdateParamsResponse) ProtoMessage()           {}
+func (m *MsgUpdateParamsResponse) Reset()                  { *m = MsgUpdateParamsResponse{} }
+func (m *MsgUpdateParamsResponse) String() string          { return "update_params_response" }
+func (m *MsgUpdateParamsResponse) XXX_MessageName() string { return "syreen.intent.MsgUpdateParamsResponse" }
+
 // --- MsgSubmitChain ---
 
 // MsgSubmitChain submits a multi-step conditional trading strategy

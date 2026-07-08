@@ -1321,6 +1321,29 @@ func NewSyreenApp(
 		},
 	)
 
+	// v2.4.1: raise the intent solving window 10 -> 100 blocks (~2s -> ~21s at
+	// ~208ms blocks) so the solver best-execution auction is actually usable — a
+	// 2s window fired the auto-fulfill before any solver could see and bid on the
+	// intent. Does NOT affect block time or non-intent transactions. Also ships
+	// MsgUpdateParams so future intent-param tuning is a gov vote, not a binary
+	// upgrade. Idempotent (only raises the window if it is below 100).
+	app.UpgradeKeeper.SetUpgradeHandler("v2.4.1",
+		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			logger.Info("applying v2.4.1 upgrade: raise intent solving_window to 100", "height", sdkCtx.BlockHeight())
+
+			p := app.IntentKeeper.GetParams(ctx)
+			if p.SolvingWindow < 100 {
+				p.SolvingWindow = 100
+			}
+			if err := app.IntentKeeper.SetParams(ctx, p); err != nil {
+				return nil, err
+			}
+
+			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
+
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
 			// If latest version is corrupt (e.g. mid-commit crash), try

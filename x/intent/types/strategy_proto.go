@@ -138,6 +138,19 @@ func uint64Field(num int32, name string) *descriptorpb.FieldDescriptorProto {
 	}
 }
 
+func bytesField(num int32, name string) *descriptorpb.FieldDescriptorProto {
+	t := descriptorpb.FieldDescriptorProto_TYPE_BYTES
+	l := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
+	n := num
+	return &descriptorpb.FieldDescriptorProto{
+		Name:     sp(name),
+		Number:   &n,
+		Type:     &t,
+		Label:    &l,
+		JsonName: sp(toLowerCamel(name)),
+	}
+}
+
 // toLowerCamel converts snake_case to lowerCamelCase (creator -> creator,
 // template_name -> templateName).
 func toLowerCamel(s string) string {

@@ -220,7 +220,7 @@ func TestDefaultParams(t *testing.T) {
 	p := types.DefaultParams()
 	require.NoError(t, p.Validate())
 	require.True(t, p.MinSolverStake.IsPositive())
-	require.Equal(t, uint64(10), p.SolvingWindow)
+	require.Equal(t, uint64(100), p.SolvingWindow)
 	require.Equal(t, uint64(20), p.MaxSolutionsPerIntent)
 	require.True(t, p.SolverSlashFraction.IsPositive())
 	require.True(t, p.SolverSlashFraction.LT(math.LegacyOneDec()))

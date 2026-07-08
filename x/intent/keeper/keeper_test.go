@@ -689,8 +689,14 @@ func TestSubmitSolution_MaxSolutionsExceeded(t *testing.T) {
 func TestSubmitSolution_SolvingWindowClosed(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
+	// Pin SolvingWindow=10 for this test (the module default is larger) so the
+	// window closes at block 11 while the intent (expiry 51) is still live.
+	swParams := k.GetParams(ctx)
+	swParams.SolvingWindow = 10
+	require.NoError(t, k.SetParams(ctx, swParams))
+
 	// Use long expiry so the solving window check triggers before the expiry check.
-	// Default SolvingWindow=10, so intent created at block 1 has window closing at block 11.
+	// SolvingWindow=10, so intent created at block 1 has window closing at block 11.
 	// We need an intent that hasn't expired but whose solving window has closed.
 	// Register solver
 	require.NoError(t, k.RegisterSolver(ctx, &types.MsgRegisterSolver{

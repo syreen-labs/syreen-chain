@@ -472,6 +472,61 @@ func (m *MsgCancelIntentResponse) MarshalToSizedBuffer(dAtA []byte) (int, error)
 }
 
 // ---------------------------------------------------------------------------
+// MsgUpdateParams
+// ---------------------------------------------------------------------------
+
+var xxx_messageInfo_MsgUpdateParams proto.InternalMessageInfo
+
+func (m *MsgUpdateParams) XXX_Unmarshal(b []byte) error { return m.Unmarshal(b) }
+func (m *MsgUpdateParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgUpdateParams.Marshal(b, m, deterministic)
+	}
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *MsgUpdateParams) XXX_Merge(src proto.Message)  { xxx_messageInfo_MsgUpdateParams.Merge(m, src) }
+func (m *MsgUpdateParams) XXX_Size() int                { return m.Size() }
+func (m *MsgUpdateParams) XXX_DiscardUnknown()          { xxx_messageInfo_MsgUpdateParams.DiscardUnknown(m) }
+
+func (m *MsgUpdateParams) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	bz, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	n := len(bz)
+	copy(dAtA[len(dAtA)-n:], bz)
+	return n, nil
+}
+
+// ---------------------------------------------------------------------------
+// MsgUpdateParamsResponse
+// ---------------------------------------------------------------------------
+
+var xxx_messageInfo_MsgUpdateParamsResponse proto.InternalMessageInfo
+
+func (m *MsgUpdateParamsResponse) XXX_Unmarshal(b []byte) error { return m.Unmarshal(b) }
+func (m *MsgUpdateParamsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgUpdateParamsResponse.Marshal(b, m, deterministic)
+	}
+	return nil, nil
+}
+func (m *MsgUpdateParamsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgUpdateParamsResponse.Merge(m, src)
+}
+func (m *MsgUpdateParamsResponse) XXX_Size() int       { return m.Size() }
+func (m *MsgUpdateParamsResponse) XXX_DiscardUnknown() { xxx_messageInfo_MsgUpdateParamsResponse.DiscardUnknown(m) }
+
+func (m *MsgUpdateParamsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	return len(dAtA), nil
+}
+
+// ---------------------------------------------------------------------------
 // MsgCreateStrategy
 // ---------------------------------------------------------------------------
 

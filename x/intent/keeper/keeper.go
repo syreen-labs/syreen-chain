@@ -60,6 +60,13 @@ func NewKeeper(
 	}
 }
 
+// GetAuthority returns the module's governance authority address (the account
+// permitted to execute MsgUpdateParams). Set from the gov module address at
+// keeper construction.
+func (k Keeper) GetAuthority() string {
+	return k.authority
+}
+
 // SetDexKeeper sets the DEX keeper for trading intent execution.
 func (k *Keeper) SetDexKeeper(dexKeeper types.DexKeeper) {
 	k.dexKeeper = dexKeeper

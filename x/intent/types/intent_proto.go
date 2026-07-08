@@ -41,6 +41,8 @@ const (
 	idxMsgCancelChainResponse     = 13
 	idxMsgCancelIntent            = 14
 	idxMsgCancelIntentResponse    = 15
+	idxMsgUpdateParams            = 16
+	idxMsgUpdateParamsResponse    = 17
 )
 
 func init() {
@@ -128,6 +130,14 @@ func init() {
 				},
 			},
 			{Name: sp("MsgCancelIntentResponse")}, // 15
+			{ // 16: MsgUpdateParams
+				Name: sp("MsgUpdateParams"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					stringField(1, "authority"),
+					bytesField(2, "params"),
+				},
+			},
+			{Name: sp("MsgUpdateParamsResponse")}, // 17
 		},
 	}
 
@@ -147,6 +157,8 @@ func init() {
 	gogoproto.RegisterType((*MsgCancelChainResponse)(nil), "syreen.intent.MsgCancelChainResponse")
 	gogoproto.RegisterType((*MsgCancelIntent)(nil), "syreen.intent.MsgCancelIntent")
 	gogoproto.RegisterType((*MsgCancelIntentResponse)(nil), "syreen.intent.MsgCancelIntentResponse")
+	gogoproto.RegisterType((*MsgUpdateParams)(nil), "syreen.intent.MsgUpdateParams")
+	gogoproto.RegisterType((*MsgUpdateParamsResponse)(nil), "syreen.intent.MsgUpdateParamsResponse")
 
 	raw, err := proto.Marshal(fd)
 	if err != nil {
@@ -205,6 +217,14 @@ func (*MsgCancelIntent) Descriptor() ([]byte, []int) {
 
 func (*MsgCancelIntentResponse) Descriptor() ([]byte, []int) {
 	return intentTxFileDescriptorGzipped, []int{idxMsgCancelIntentResponse}
+}
+
+func (*MsgUpdateParams) Descriptor() ([]byte, []int) {
+	return intentTxFileDescriptorGzipped, []int{idxMsgUpdateParams}
+}
+
+func (*MsgUpdateParamsResponse) Descriptor() ([]byte, []int) {
+	return intentTxFileDescriptorGzipped, []int{idxMsgUpdateParamsResponse}
 }
 
 // Response types
@@ -976,6 +996,87 @@ func (m *MsgCancelIntentResponse) MarshalTo(dAtA []byte) (int, error) { return 0
 func (m *MsgCancelIntentResponse) Size() int { return 0 }
 func (m *MsgCancelIntentResponse) Unmarshal(data []byte) error {
 	*m = MsgCancelIntentResponse{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 { return protowire.ParseError(n) }
+		data = data[n:]
+		nn, err := skipField(data, num, typ)
+		if err != nil { return err }
+		data = data[nn:]
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Marshal / Unmarshal — MsgUpdateParams
+//
+// Field 1 (authority) is a proto3 string; field 2 (params) is the Params struct
+// encoded as JSON in a length-delimited bytes field. This mirrors how the query
+// responses (e.g. QuerySolutionsResponse/QueryParamsResponse) hand-roll complex
+// fields as JSON bytes. A wrong encoding here would silently drop params on a
+// gov update — so Marshal/Unmarshal round-trip is covered by a dedicated test.
+// ---------------------------------------------------------------------------
+
+func (m *MsgUpdateParams) Marshal() ([]byte, error) {
+	var b []byte
+	b = appendString(b, 1, m.Authority)
+	pb, err := json.Marshal(&m.Params)
+	if err != nil {
+		return nil, fmt.Errorf("MsgUpdateParams: failed to marshal params: %w", err)
+	}
+	b = protowire.AppendTag(b, 2, protowire.BytesType)
+	b = protowire.AppendBytes(b, pb)
+	return b, nil
+}
+
+func (m *MsgUpdateParams) MarshalTo(dAtA []byte) (int, error) {
+	bz, err := m.Marshal()
+	if err != nil { return 0, err }
+	copy(dAtA, bz)
+	return len(bz), nil
+}
+
+func (m *MsgUpdateParams) Size() int { bz, _ := m.Marshal(); return len(bz) }
+
+func (m *MsgUpdateParams) Unmarshal(data []byte) error {
+	*m = MsgUpdateParams{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 { return protowire.ParseError(n) }
+		data = data[n:]
+		switch num {
+		case 1:
+			if typ != protowire.BytesType { return fmt.Errorf("MsgUpdateParams: wrong wire type for authority") }
+			v, nn := protowire.ConsumeString(data)
+			if nn < 0 { return protowire.ParseError(nn) }
+			m.Authority = v
+			data = data[nn:]
+		case 2:
+			if typ != protowire.BytesType { return fmt.Errorf("MsgUpdateParams: wrong wire type for params") }
+			v, nn := protowire.ConsumeBytes(data)
+			if nn < 0 { return protowire.ParseError(nn) }
+			if err := json.Unmarshal(v, &m.Params); err != nil {
+				return fmt.Errorf("MsgUpdateParams: invalid params: %w", err)
+			}
+			data = data[nn:]
+		default:
+			nn, err := skipField(data, num, typ)
+			if err != nil { return err }
+			data = data[nn:]
+		}
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// MsgUpdateParamsResponse — Marshal/Unmarshal
+// ---------------------------------------------------------------------------
+
+func (m *MsgUpdateParamsResponse) Marshal() ([]byte, error) { return nil, nil }
+func (m *MsgUpdateParamsResponse) MarshalTo(dAtA []byte) (int, error) { return 0, nil }
+func (m *MsgUpdateParamsResponse) Size() int { return 0 }
+func (m *MsgUpdateParamsResponse) Unmarshal(data []byte) error {
+	*m = MsgUpdateParamsResponse{}
 	for len(data) > 0 {
 		num, typ, n := protowire.ConsumeTag(data)
 		if n < 0 { return protowire.ParseError(n) }

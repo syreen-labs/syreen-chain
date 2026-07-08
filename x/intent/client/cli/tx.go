@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -13,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	"syreen/x/intent/types"
 )
@@ -39,8 +41,58 @@ func GetTxCmd() *cobra.Command {
 		CmdStopLoss(),
 		CmdTakeProfit(),
 		CmdDCA(),
+		CmdUpdateParams(),
 	)
 
+	return cmd
+}
+
+// CmdUpdateParams builds a MsgUpdateParams from a JSON params file. This is
+// mainly for generating the message body of a gov proposal — gov (not the CLI
+// caller) actually executes it, so the authority defaults to the gov module
+// address unless overridden with --authority.
+func CmdUpdateParams() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update-params [params-json-file]",
+		Short: "Generate a MsgUpdateParams for the intent module (gov-executed)",
+		Long: `Read a JSON file describing the full intent module Params and build a
+MsgUpdateParams. The authority defaults to the gov module account; override it
+with --authority. This message is intended to be wrapped in a gov proposal.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			bz, err := os.ReadFile(args[0])
+			if err != nil {
+				return fmt.Errorf("failed to read params file: %w", err)
+			}
+			var params types.Params
+			if err := json.Unmarshal(bz, &params); err != nil {
+				return fmt.Errorf("invalid params JSON: %w", err)
+			}
+
+			authority, err := cmd.Flags().GetString("authority")
+			if err != nil {
+				return err
+			}
+			if authority == "" {
+				authority = authtypes.NewModuleAddress("gov").String()
+			}
+
+			msg := &types.MsgUpdateParams{
+				Authority: authority,
+				Params:    params,
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	cmd.Flags().String("authority", "", "authority address (defaults to the gov module account)")
+	flags.AddTxFlagsToCmd(cmd)
 	return cmd
 }
 
