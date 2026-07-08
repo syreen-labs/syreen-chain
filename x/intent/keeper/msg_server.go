@@ -101,6 +101,17 @@ func (m msgServer) FulfillIntent(ctx context.Context, msg *types.MsgFulfillInten
 	return &types.MsgFulfillIntentResponse{}, nil
 }
 
+func (m msgServer) CancelIntent(ctx context.Context, msg *types.MsgCancelIntent) (*types.MsgCancelIntentResponse, error) {
+	if !syreenconfig.IsModuleEnabled("intent") {
+		return nil, syreenconfig.ErrModuleDisabled("intent")
+	}
+	// CancelIntent emits its own cancel_intent event from the keeper.
+	if err := m.Keeper.CancelIntent(ctx, msg); err != nil {
+		return nil, err
+	}
+	return &types.MsgCancelIntentResponse{}, nil
+}
+
 func (m msgServer) SubmitChain(ctx context.Context, msg *types.MsgSubmitChain) (*types.MsgSubmitChainResponse, error) {
 	if !syreenconfig.IsModuleEnabled("intent") {
 		return nil, syreenconfig.ErrModuleDisabled("intent")

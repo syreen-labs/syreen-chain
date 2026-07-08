@@ -33,6 +33,7 @@ func GetTxCmd() *cobra.Command {
 		CmdDeregisterSolver(),
 		CmdSubmitSolution(),
 		CmdFulfillIntent(),
+		CmdCancelIntent(),
 		CmdLimitBuy(),
 		CmdLimitSell(),
 		CmdStopLoss(),
@@ -525,6 +526,30 @@ func CmdDCA() *cobra.Command {
 				MaxFee:       sdk.NewCoins(sdk.NewCoin(args[1], math.NewInt(feeAmount))),
 				Tip:          sdk.NewCoins(),
 				ExpiryBlocks: expiryBlocks,
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+func CmdCancelIntent() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "cancel-intent [intent-id]",
+		Short: "Cancel your pending/solving intent and reclaim locked funds",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgCancelIntent{
+				Creator:  clientCtx.GetFromAddress().String(),
+				IntentID: args[0],
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)

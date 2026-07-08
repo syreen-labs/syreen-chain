@@ -466,6 +466,10 @@ func (k Keeper) CompleteSolverUnbonding(ctx context.Context) {
 			// the iterator may reuse the underlying buffer.
 			key := append([]byte(nil), iter.Key()...)
 			keysToDelete = append(keysToDelete, key)
+			sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+				"solver_unbonding_complete",
+				sdk.NewAttribute("address", solver.Address),
+			))
 			k.Logger(ctx).Info("solver unbonding complete", "address", solver.Address)
 		}
 	}
@@ -625,6 +629,13 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 		return types.ErrInvalidSolution
 	}
 
+	// Lifecycle event: the auction winner has been selected for this intent.
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+		"auction_won",
+		sdk.NewAttribute("intent_id", msg.IntentID),
+		sdk.NewAttribute("solver_addr", solverAddrStr),
+	))
+
 	// Snapshot the creator's output-denom balance BEFORE the solution executes so
 	// that outcome verification can measure the delta actually delivered by the
 	// solver rather than the creator's pre-existing holdings.
@@ -662,6 +673,14 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 					// Reduce the solver's recorded stake
 					solver.StakedAmount.Amount = solver.StakedAmount.Amount.Sub(slashAmount)
 
+					sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+						"solver_slashed",
+						sdk.NewAttribute("solver_addr", solverAddrStr),
+						sdk.NewAttribute("intent_id", msg.IntentID),
+						sdk.NewAttribute("slashed", slashCoins.String()),
+						sdk.NewAttribute("reason", "execution_failed"),
+					))
+
 					k.Logger(ctx).Info("solver slashed",
 						"solver", solverAddrStr, "slashed", slashCoins, "remaining_stake", solver.StakedAmount)
 				}
@@ -670,6 +689,11 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 			// Deactivate solver if stake drops below minimum
 			if solver.StakedAmount.IsLT(params.MinSolverStake) {
 				solver.Active = false
+				sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+					"solver_deactivated",
+					sdk.NewAttribute("solver_addr", solverAddrStr),
+					sdk.NewAttribute("reason", "insufficient_stake"),
+				))
 				k.Logger(ctx).Info("solver deactivated due to insufficient stake after slashing",
 					"solver", solverAddrStr, "remaining_stake", solver.StakedAmount)
 			}
@@ -721,10 +745,22 @@ func (k *Keeper) FulfillIntent(ctx context.Context, msg *types.MsgFulfillIntent)
 					slashCoins := sdk.NewCoins(sdk.NewCoin(solver.StakedAmount.Denom, slashAmount))
 					if sendErr := k.routeSlashToFairnessPool(ctx, slashCoins); sendErr == nil {
 						solver.StakedAmount.Amount = solver.StakedAmount.Amount.Sub(slashAmount)
+						sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+							"solver_slashed",
+							sdk.NewAttribute("solver_addr", solverAddrStr),
+							sdk.NewAttribute("intent_id", msg.IntentID),
+							sdk.NewAttribute("slashed", slashCoins.String()),
+							sdk.NewAttribute("reason", "outcome_verification_failed"),
+						))
 					}
 				}
 				if solver.StakedAmount.IsLT(params.MinSolverStake) {
 					solver.Active = false
+					sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+						"solver_deactivated",
+						sdk.NewAttribute("solver_addr", solverAddrStr),
+						sdk.NewAttribute("reason", "insufficient_stake"),
+					))
 				}
 				k.SetSolver(ctx, solver)
 			}
@@ -1258,6 +1294,10 @@ func (k Keeper) ExpireIntents(ctx context.Context) {
 	for _, id := range pruneIntentIDs {
 		kvStore.Delete(types.IntentKey(id))
 		k.deleteSolutionsForIntent(ctx, id)
+		sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+			"intent_pruned",
+			sdk.NewAttribute("intent_id", id),
+		))
 	}
 
 	for _, intent := range expiredIntents {
@@ -1285,6 +1325,12 @@ func (k Keeper) ExpireIntents(ctx context.Context) {
 
 		// M-04: Delete orphaned solutions for expired intents to prevent state bloat
 		k.deleteSolutionsForIntent(ctx, intent.ID)
+
+		sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+			"intent_expired",
+			sdk.NewAttribute("intent_id", intent.ID),
+			sdk.NewAttribute("creator", intent.Creator),
+		))
 
 		k.Logger(ctx).Info("intent expired", "id", intent.ID, "creator", intent.Creator)
 	}
@@ -1377,6 +1423,66 @@ func (k Keeper) expireAndRefundIntent(ctx context.Context, intent types.Intent) 
 	intent.Status = types.StatusExpired
 	k.SetIntent(ctx, intent)
 	k.Logger(ctx).Info("intent auto-expired and refunded (solving window elapsed, no fulfillment)", "id", intent.ID)
+}
+
+// CancelIntent lets the intent creator cancel a still-active (Pending/Solving)
+// intent and reclaim all locked funds (MaxFee + Tip and any locked trading
+// input), mirroring the refund path used by ExpireIntents/expireAndRefundIntent.
+// Only the creator may cancel. Chain-linked intents cannot be cancelled directly
+// (their funds are escrowed at the chain level) — cancel the chain instead.
+func (k *Keeper) CancelIntent(ctx context.Context, msg *types.MsgCancelIntent) error {
+	intent, found := k.GetIntent(ctx, msg.IntentID)
+	if !found {
+		return types.ErrIntentNotFound
+	}
+
+	if intent.Creator != msg.Creator {
+		return types.ErrIntentNotCreator
+	}
+
+	if intent.Status != types.StatusPending && intent.Status != types.StatusSolving {
+		return types.ErrIntentNotCancellable
+	}
+
+	// A chain step's tokens are locked/refunded at the chain level; cancelling the
+	// step intent directly would double-refund. Require chain cancellation instead.
+	if k.IsChainLinkedIntent(ctx, msg.IntentID) {
+		return types.ErrIntentNotCancellable
+	}
+
+	creatorAddr, err := sdk.AccAddressFromBech32(intent.Creator)
+	if err != nil {
+		return fmt.Errorf("invalid creator address: %w", err)
+	}
+
+	// Refund locked MaxFee + Tip (same as the expiry refund path).
+	totalLock := intent.MaxFee.Add(intent.Tip...)
+	if totalLock.IsAllPositive() {
+		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, creatorAddr, totalLock); err != nil {
+			return fmt.Errorf("failed to refund locked fees: %w", err)
+		}
+	}
+
+	// Refund locked trading input tokens for trading intents.
+	k.refundTradingTokens(ctx, intent)
+
+	// Clean up any submitted solutions.
+	k.deleteSolutionsForIntent(ctx, msg.IntentID)
+
+	// Move to a terminal state. Reuse StatusExpired so existing terminal-state
+	// checks (FulfillIntent guard, IsTerminal pruning) treat it correctly.
+	intent.Status = types.StatusExpired
+	k.SetIntent(ctx, intent)
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+		"cancel_intent",
+		sdk.NewAttribute("creator", intent.Creator),
+		sdk.NewAttribute("intent_id", intent.ID),
+	))
+
+	k.Logger(ctx).Info("intent cancelled by creator", "id", intent.ID, "creator", intent.Creator)
+	return nil
 }
 
 // nextIntentID generates the next sequential intent ID

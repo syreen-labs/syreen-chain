@@ -13,6 +13,7 @@ func RegisterInterfaces(registry types.InterfaceRegistry) {
 		&MsgDeregisterSolver{},
 		&MsgSubmitSolution{},
 		&MsgFulfillIntent{},
+		&MsgCancelIntent{},
 		&MsgSubmitChain{},
 		&MsgCancelChain{},
 		&MsgCreateStrategy{},

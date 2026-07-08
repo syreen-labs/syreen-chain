@@ -23,4 +23,6 @@ var (
 	ErrChainInvalidCondition  = errors.Register(ModuleName, 19, "invalid chain step condition")
 	ErrChainNotCreator        = errors.Register(ModuleName, 20, "only chain creator can cancel")
 	ErrCrossChainTransferFail = errors.Register(ModuleName, 21, "IBC transfer failed for cross-chain intent")
+	ErrIntentNotCreator       = errors.Register(ModuleName, 22, "only the intent creator can cancel it")
+	ErrIntentNotCancellable   = errors.Register(ModuleName, 23, "intent cannot be cancelled in its current state")
 )

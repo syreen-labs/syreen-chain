@@ -39,6 +39,8 @@ const (
 	idxMsgSubmitChainResponse     = 11
 	idxMsgCancelChain             = 12
 	idxMsgCancelChainResponse     = 13
+	idxMsgCancelIntent            = 14
+	idxMsgCancelIntentResponse    = 15
 )
 
 func init() {
@@ -118,6 +120,14 @@ func init() {
 				},
 			},
 			{Name: sp("MsgCancelChainResponse")}, // 13
+			{ // 14: MsgCancelIntent
+				Name: sp("MsgCancelIntent"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					stringField(1, "creator"),
+					stringField(2, "intent_id"),
+				},
+			},
+			{Name: sp("MsgCancelIntentResponse")}, // 15
 		},
 	}
 
@@ -135,6 +145,8 @@ func init() {
 	gogoproto.RegisterType((*MsgSubmitChainResponse)(nil), "syreen.intent.MsgSubmitChainResponse")
 	gogoproto.RegisterType((*MsgCancelChain)(nil), "syreen.intent.MsgCancelChain")
 	gogoproto.RegisterType((*MsgCancelChainResponse)(nil), "syreen.intent.MsgCancelChainResponse")
+	gogoproto.RegisterType((*MsgCancelIntent)(nil), "syreen.intent.MsgCancelIntent")
+	gogoproto.RegisterType((*MsgCancelIntentResponse)(nil), "syreen.intent.MsgCancelIntentResponse")
 
 	raw, err := proto.Marshal(fd)
 	if err != nil {
@@ -185,6 +197,14 @@ func (*MsgSubmitChainResponse) Descriptor() ([]byte, []int) {
 
 func (*MsgCancelChain) Descriptor() ([]byte, []int) {
 	return intentTxFileDescriptorGzipped, []int{idxMsgCancelChain}
+}
+
+func (*MsgCancelIntent) Descriptor() ([]byte, []int) {
+	return intentTxFileDescriptorGzipped, []int{idxMsgCancelIntent}
+}
+
+func (*MsgCancelIntentResponse) Descriptor() ([]byte, []int) {
+	return intentTxFileDescriptorGzipped, []int{idxMsgCancelIntentResponse}
 }
 
 // Response types
@@ -888,6 +908,74 @@ func (m *MsgCancelChainResponse) MarshalTo(dAtA []byte) (int, error) { return 0,
 func (m *MsgCancelChainResponse) Size() int { return 0 }
 func (m *MsgCancelChainResponse) Unmarshal(data []byte) error {
 	*m = MsgCancelChainResponse{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 { return protowire.ParseError(n) }
+		data = data[n:]
+		nn, err := skipField(data, num, typ)
+		if err != nil { return err }
+		data = data[nn:]
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Marshal / Unmarshal — MsgCancelIntent
+// ---------------------------------------------------------------------------
+
+func (m *MsgCancelIntent) Marshal() ([]byte, error) {
+	var b []byte
+	b = appendString(b, 1, m.Creator)
+	b = appendString(b, 2, m.IntentID)
+	return b, nil
+}
+
+func (m *MsgCancelIntent) MarshalTo(dAtA []byte) (int, error) {
+	bz, err := m.Marshal()
+	if err != nil { return 0, err }
+	copy(dAtA, bz)
+	return len(bz), nil
+}
+
+func (m *MsgCancelIntent) Size() int { bz, _ := m.Marshal(); return len(bz) }
+
+func (m *MsgCancelIntent) Unmarshal(data []byte) error {
+	*m = MsgCancelIntent{}
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 { return protowire.ParseError(n) }
+		data = data[n:]
+		switch num {
+		case 1:
+			if typ != protowire.BytesType { return fmt.Errorf("MsgCancelIntent: wrong wire type for creator") }
+			v, nn := protowire.ConsumeString(data)
+			if nn < 0 { return protowire.ParseError(nn) }
+			m.Creator = v
+			data = data[nn:]
+		case 2:
+			if typ != protowire.BytesType { return fmt.Errorf("MsgCancelIntent: wrong wire type for intent_id") }
+			v, nn := protowire.ConsumeString(data)
+			if nn < 0 { return protowire.ParseError(nn) }
+			m.IntentID = v
+			data = data[nn:]
+		default:
+			nn, err := skipField(data, num, typ)
+			if err != nil { return err }
+			data = data[nn:]
+		}
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// MsgCancelIntentResponse — Marshal/Unmarshal
+// ---------------------------------------------------------------------------
+
+func (m *MsgCancelIntentResponse) Marshal() ([]byte, error) { return nil, nil }
+func (m *MsgCancelIntentResponse) MarshalTo(dAtA []byte) (int, error) { return 0, nil }
+func (m *MsgCancelIntentResponse) Size() int { return 0 }
+func (m *MsgCancelIntentResponse) Unmarshal(data []byte) error {
+	*m = MsgCancelIntentResponse{}
 	for len(data) > 0 {
 		num, typ, n := protowire.ConsumeTag(data)
 		if n < 0 { return protowire.ParseError(n) }

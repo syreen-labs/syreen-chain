@@ -2,24 +2,45 @@ package types
 
 import "fmt"
 
-// GenesisState defines the intent module's genesis state
+// GenesisState defines the intent module's genesis state.
+//
+// In addition to Params/Intents/Solvers, it carries the full in-flight working
+// set — Solutions, Chains, Strategies — plus the three monotonic ID counters so
+// that an ExportGenesis→InitGenesis round-trip (state migration) is lossless and
+// does NOT reset the counters (which would otherwise risk minting duplicate
+// intent/chain/strategy IDs against surviving records).
 type GenesisState struct {
-	Params  Params   `json:"params"`
-	Intents []Intent `json:"intents"`
-	Solvers []Solver `json:"solvers"`
+	Params     Params        `json:"params"`
+	Intents    []Intent      `json:"intents"`
+	Solvers    []Solver      `json:"solvers"`
+	Solutions  []Solution    `json:"solutions"`
+	Chains     []IntentChain `json:"chains"`
+	Strategies []Strategy    `json:"strategies"`
+
+	// ID counters (raw stored counter values = highest ID issued so far). These
+	// mirror the on-chain intent_counter / chain_counter / strategy_counter keys.
+	NextIntentId   uint64 `json:"next_intent_id"`
+	NextChainId    uint64 `json:"next_chain_id"`
+	NextStrategyId uint64 `json:"next_strategy_id"`
 }
 
 func (gs *GenesisState) ProtoMessage()           {}
 func (gs *GenesisState) Reset()                  { *gs = GenesisState{} }
-func (gs *GenesisState) String() string          { return fmt.Sprintf("intent genesis: %d intents, %d solvers", len(gs.Intents), len(gs.Solvers)) }
+func (gs *GenesisState) String() string {
+	return fmt.Sprintf("intent genesis: %d intents, %d solvers, %d solutions, %d chains, %d strategies",
+		len(gs.Intents), len(gs.Solvers), len(gs.Solutions), len(gs.Chains), len(gs.Strategies))
+}
 func (gs *GenesisState) XXX_MessageName() string { return "syreen.intent.GenesisState" }
 
 // DefaultGenesis returns the default genesis state
 func DefaultGenesis() *GenesisState {
 	return &GenesisState{
-		Params:  DefaultParams(),
-		Intents: []Intent{},
-		Solvers: []Solver{},
+		Params:     DefaultParams(),
+		Intents:    []Intent{},
+		Solvers:    []Solver{},
+		Solutions:  []Solution{},
+		Chains:     []IntentChain{},
+		Strategies: []Strategy{},
 	}
 }
 

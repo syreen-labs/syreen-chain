@@ -223,6 +223,7 @@ func MakeEncodingConfig() EncodingConfig {
 		{"syreen.intent.MsgDeregisterSolver", "address"},
 		{"syreen.intent.MsgSubmitSolution", "solver_addr"},
 		{"syreen.intent.MsgFulfillIntent", "sender"},
+		{"syreen.intent.MsgCancelIntent", "creator"},
 		{"syreen.intent.MsgSubmitChain", "creator"},
 		{"syreen.intent.MsgCancelChain", "creator"},
 		{"syreen.intent.MsgCreateStrategy", "creator"},

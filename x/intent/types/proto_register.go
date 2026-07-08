@@ -82,6 +82,14 @@ func registerProtoFileDescriptors() {
 				},
 			},
 			{Name: sp("MsgCancelChainResponse")},
+			{
+				Name: sp("MsgCancelIntent"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					fdStringField(1, "creator"),
+					fdStringField(2, "intent_id"),
+				},
+			},
+			{Name: sp("MsgCancelIntentResponse")},
 			// Strategy messages carry full field definitions so that the
 			// SDK's dynamicpb-based custom signer resolver (see
 			// app/encoding.go) can locate the "creator" field by name.
@@ -126,6 +134,7 @@ func registerProtoFileDescriptors() {
 					{Name: sp("DeregisterSolver"), InputType: sp(".syreen.intent.MsgDeregisterSolver"), OutputType: sp(".syreen.intent.MsgDeregisterSolverResponse")},
 					{Name: sp("SubmitSolution"), InputType: sp(".syreen.intent.MsgSubmitSolution"), OutputType: sp(".syreen.intent.MsgSubmitSolutionResponse")},
 					{Name: sp("FulfillIntent"), InputType: sp(".syreen.intent.MsgFulfillIntent"), OutputType: sp(".syreen.intent.MsgFulfillIntentResponse")},
+					{Name: sp("CancelIntent"), InputType: sp(".syreen.intent.MsgCancelIntent"), OutputType: sp(".syreen.intent.MsgCancelIntentResponse")},
 					{Name: sp("SubmitChain"), InputType: sp(".syreen.intent.MsgSubmitChain"), OutputType: sp(".syreen.intent.MsgSubmitChainResponse")},
 					{Name: sp("CancelChain"), InputType: sp(".syreen.intent.MsgCancelChain"), OutputType: sp(".syreen.intent.MsgCancelChainResponse")},
 					{Name: sp("CreateStrategy"), InputType: sp(".syreen.intent.MsgCreateStrategy"), OutputType: sp(".syreen.intent.MsgCreateStrategyResponse")},

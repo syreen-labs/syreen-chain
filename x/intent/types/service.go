@@ -108,6 +108,7 @@ type MsgServer interface {
 	DeregisterSolver(context.Context, *MsgDeregisterSolver) (*MsgDeregisterSolverResponse, error)
 	SubmitSolution(context.Context, *MsgSubmitSolution) (*MsgSubmitSolutionResponse, error)
 	FulfillIntent(context.Context, *MsgFulfillIntent) (*MsgFulfillIntentResponse, error)
+	CancelIntent(context.Context, *MsgCancelIntent) (*MsgCancelIntentResponse, error)
 	SubmitChain(context.Context, *MsgSubmitChain) (*MsgSubmitChainResponse, error)
 	CancelChain(context.Context, *MsgCancelChain) (*MsgCancelChainResponse, error)
 	CreateStrategy(context.Context, *MsgCreateStrategy) (*MsgCreateStrategyResponse, error)
@@ -666,6 +667,21 @@ func _Msg_FulfillIntent_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_CancelIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgCancelIntent)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).CancelIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/syreen.intent.Msg/CancelIntent"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).CancelIntent(ctx, req.(*MsgCancelIntent))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Msg_SubmitChain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgSubmitChain)
 	if err := dec(in); err != nil {
@@ -888,6 +904,10 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FulfillIntent",
 			Handler:    _Msg_FulfillIntent_Handler,
+		},
+		{
+			MethodName: "CancelIntent",
+			Handler:    _Msg_CancelIntent_Handler,
 		},
 		{
 			MethodName: "SubmitChain",

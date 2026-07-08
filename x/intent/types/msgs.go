@@ -13,6 +13,7 @@ const (
 	TypeMsgDeregisterSolver = "deregister_solver"
 	TypeMsgSubmitSolution  = "submit_solution"
 	TypeMsgFulfillIntent   = "fulfill_intent"
+	TypeMsgCancelIntent    = "cancel_intent"
 	TypeMsgSubmitChain     = "submit_chain"
 	TypeMsgCancelChain     = "cancel_chain"
 )
@@ -217,6 +218,38 @@ func (m *MsgFulfillIntent) ValidateBasic() error {
 	}
 	return nil
 }
+
+// --- MsgCancelIntent ---
+
+// MsgCancelIntent lets an intent's creator cancel it before hard expiry and
+// reclaim any locked funds (MaxFee + Tip and any locked trading input). Only the
+// creator may cancel, and only while the intent is still Pending or Solving.
+type MsgCancelIntent struct {
+	Creator  string `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator"`
+	IntentID string `protobuf:"bytes,2,opt,name=intent_id,proto3" json:"intent_id"`
+}
+
+func (m *MsgCancelIntent) ProtoMessage()           {}
+func (m *MsgCancelIntent) Reset()                  { *m = MsgCancelIntent{} }
+func (m *MsgCancelIntent) String() string          { return fmt.Sprintf("cancel_intent: creator=%s intent=%s", m.Creator, m.IntentID) }
+func (m *MsgCancelIntent) XXX_MessageName() string { return "syreen.intent.MsgCancelIntent" }
+
+func (m *MsgCancelIntent) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Creator); err != nil {
+		return fmt.Errorf("invalid creator address: %w", err)
+	}
+	if m.IntentID == "" {
+		return fmt.Errorf("intent ID cannot be empty")
+	}
+	return nil
+}
+
+type MsgCancelIntentResponse struct{}
+
+func (m *MsgCancelIntentResponse) ProtoMessage()           {}
+func (m *MsgCancelIntentResponse) Reset()                  { *m = MsgCancelIntentResponse{} }
+func (m *MsgCancelIntentResponse) String() string          { return "cancel_intent_response" }
+func (m *MsgCancelIntentResponse) XXX_MessageName() string { return "syreen.intent.MsgCancelIntentResponse" }
 
 // --- MsgSubmitChain ---
 

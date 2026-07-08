@@ -417,6 +417,61 @@ func (m *MsgCancelChainResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) 
 }
 
 // ---------------------------------------------------------------------------
+// MsgCancelIntent
+// ---------------------------------------------------------------------------
+
+var xxx_messageInfo_MsgCancelIntent proto.InternalMessageInfo
+
+func (m *MsgCancelIntent) XXX_Unmarshal(b []byte) error { return m.Unmarshal(b) }
+func (m *MsgCancelIntent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgCancelIntent.Marshal(b, m, deterministic)
+	}
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *MsgCancelIntent) XXX_Merge(src proto.Message)  { xxx_messageInfo_MsgCancelIntent.Merge(m, src) }
+func (m *MsgCancelIntent) XXX_Size() int                { return m.Size() }
+func (m *MsgCancelIntent) XXX_DiscardUnknown()          { xxx_messageInfo_MsgCancelIntent.DiscardUnknown(m) }
+
+func (m *MsgCancelIntent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	bz, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	n := len(bz)
+	copy(dAtA[len(dAtA)-n:], bz)
+	return n, nil
+}
+
+// ---------------------------------------------------------------------------
+// MsgCancelIntentResponse
+// ---------------------------------------------------------------------------
+
+var xxx_messageInfo_MsgCancelIntentResponse proto.InternalMessageInfo
+
+func (m *MsgCancelIntentResponse) XXX_Unmarshal(b []byte) error { return m.Unmarshal(b) }
+func (m *MsgCancelIntentResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgCancelIntentResponse.Marshal(b, m, deterministic)
+	}
+	return nil, nil
+}
+func (m *MsgCancelIntentResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgCancelIntentResponse.Merge(m, src)
+}
+func (m *MsgCancelIntentResponse) XXX_Size() int       { return m.Size() }
+func (m *MsgCancelIntentResponse) XXX_DiscardUnknown() { xxx_messageInfo_MsgCancelIntentResponse.DiscardUnknown(m) }
+
+func (m *MsgCancelIntentResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	return len(dAtA), nil
+}
+
+// ---------------------------------------------------------------------------
 // MsgCreateStrategy
 // ---------------------------------------------------------------------------
 

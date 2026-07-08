@@ -31,6 +31,22 @@ func sampleIntent(id string) types.Intent {
 	}
 }
 
+// TestMsgCancelIntent_RoundTrip proves the hand-rolled wire codec for the new
+// MsgCancelIntent preserves both fields. A wrong Marshal here would silently drop
+// the signer (creator) or intent_id on broadcast.
+func TestMsgCancelIntent_RoundTrip(t *testing.T) {
+	orig := &types.MsgCancelIntent{Creator: "syreen1creator", IntentID: "intent-99"}
+	bz, err := orig.Marshal()
+	require.NoError(t, err)
+	require.NotEmpty(t, bz)
+
+	var got types.MsgCancelIntent
+	require.NoError(t, got.Unmarshal(bz))
+	require.Equal(t, orig.Creator, got.Creator)
+	require.Equal(t, orig.IntentID, got.IntentID)
+	require.Equal(t, orig.Size(), len(bz))
+}
+
 func TestQueryIntentRequest_RoundTrip(t *testing.T) {
 	orig := &types.QueryIntentRequest{IntentID: "intent-42"}
 	bz, err := orig.Marshal()
