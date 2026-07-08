@@ -786,6 +786,41 @@ func (k *Keeper) executeSolutionMsgs(ctx context.Context, solution *types.Soluti
 		allowedTypes[t] = true
 	}
 
+	// SECURITY (fund-safety invariants). The signer-based authorization below is
+	// necessary but NOT sufficient: solution messages are executed here in
+	// BeginBlock without any real signature, so a solver could craft a message
+	// that spends the module account's pooled escrow (all users' fees/tips/inputs
+	// + every solver's stake) or drains the creator's wallet. We defend by
+	// snapshotting balances and enforcing, after execution, that:
+	//   (1) the intent MODULE ACCOUNT balance does not DECREASE in any denom
+	//       (solutions must never move protocol escrow — keeper-driven paths do
+	//        that separately), and
+	//   (2) the CREATOR's balance only decreases by at most the intent's declared
+	//       input (InputAmount of InputDenom); no other creator denom may drop.
+	// A violation fails the whole solution (cacheCtx is never written).
+	moduleAccAddr := authtypes.NewModuleAddress(types.ModuleName)
+	intent, intentFound := k.GetIntent(ctx, solution.IntentID)
+	var intentCreatorAddr sdk.AccAddress
+	if intentFound {
+		intentCreatorAddr, _ = sdk.AccAddressFromBech32(intent.Creator)
+	}
+	// Authorized creator input spend (denom + max amount); zero for intents that
+	// do not declare a swap input, which fully protects every creator denom.
+	authorizedInputDenom := ""
+	authorizedInputAmount := math.ZeroInt()
+	if intentFound {
+		var sb types.SwapIntent
+		if err := json.Unmarshal(intent.Body, &sb); err == nil && sb.InputDenom != "" && !sb.InputAmount.IsNil() && sb.InputAmount.IsPositive() {
+			authorizedInputDenom = sb.InputDenom
+			authorizedInputAmount = sb.InputAmount
+		}
+	}
+	moduleBefore := k.bankKeeper.GetAllBalances(cacheCtx, moduleAccAddr)
+	var creatorBefore sdk.Coins
+	if intentCreatorAddr != nil {
+		creatorBefore = k.bankKeeper.GetAllBalances(cacheCtx, intentCreatorAddr)
+	}
+
 	for i, rawMsg := range solution.ExecutionMsgs {
 		// Each execution msg is a protojson-encoded sdk.Msg using the standard
 		// "@type" discriminator, e.g. {"@type":"/cosmos.bank.v1beta1.MsgSend", ...}.
@@ -806,18 +841,11 @@ func (k *Keeper) executeSolutionMsgs(ctx context.Context, solution *types.Soluti
 		}
 
 		// C-01b: Verify all signers match either the intent module account or the intent creator.
-		// This prevents a malicious solver from crafting messages that spend arbitrary users' funds.
+		// (First line of defense; the balance invariants enforced after the loop are
+		// what actually bound fund movement — see the SECURITY note above.)
 		// SECURITY: The solver address is NOT an allowed signer — only the module account and
 		// intent creator are authorized. This prevents solver self-solving via signer manipulation.
-		moduleAccAddr := authtypes.NewModuleAddress(types.ModuleName)
-
-		// Look up intent creator from the solution's intent
-		intent, intentFound := k.GetIntent(ctx, solution.IntentID)
-		var intentCreatorAddr sdk.AccAddress
-		if intentFound {
-			intentCreatorAddr, _ = sdk.AccAddressFromBech32(intent.Creator)
-		}
-
+		//
 		// SDK v0.53 removed the legacy sdk.Msg.GetSigners() method, so a type
 		// assertion on `interface{ GetSigners() []sdk.AccAddress }` silently fails
 		// (ok=false) for bank/IBC/compute messages, which would skip authorization
@@ -853,7 +881,38 @@ func (k *Keeper) executeSolutionMsgs(ctx context.Context, solution *types.Soluti
 		}
 	}
 
-	// All messages succeeded — commit the cached state
+	// SECURITY invariant (1): the module account (pooled escrow) must not lose
+	// funds to a solution. Reject any denom whose module balance decreased.
+	moduleAfter := k.bankKeeper.GetAllBalances(cacheCtx, moduleAccAddr)
+	for _, before := range moduleBefore {
+		if moduleAfter.AmountOf(before.Denom).LT(before.Amount) {
+			return fmt.Errorf("solution would reduce intent module escrow of %s (%s -> %s); refusing",
+				before.Denom, before.Amount, moduleAfter.AmountOf(before.Denom))
+		}
+	}
+
+	// SECURITY invariant (2): the creator may only be debited up to the intent's
+	// declared input (InputAmount of InputDenom). Every other denom must not drop,
+	// and InputDenom must not drop by more than the authorized amount.
+	if intentCreatorAddr != nil {
+		creatorAfter := k.bankKeeper.GetAllBalances(cacheCtx, intentCreatorAddr)
+		for _, before := range creatorBefore {
+			spent := before.Amount.Sub(creatorAfter.AmountOf(before.Denom))
+			if !spent.IsPositive() {
+				continue
+			}
+			allowed := math.ZeroInt()
+			if before.Denom == authorizedInputDenom {
+				allowed = authorizedInputAmount
+			}
+			if spent.GT(allowed) {
+				return fmt.Errorf("solution would spend %s%s of creator funds, exceeding authorized input (%s%s); refusing",
+					spent, before.Denom, allowed, before.Denom)
+			}
+		}
+	}
+
+	// All messages succeeded and fund-safety invariants held — commit.
 	write()
 	return nil
 }

@@ -120,6 +120,9 @@ func (m *mockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, _, _ str
 func (m *mockBankKeeper) GetBalance(_ context.Context, _ sdk.AccAddress, _ string) sdk.Coin {
 	return sdk.NewInt64Coin("usyreen", 1000000)
 }
+func (m *mockBankKeeper) GetAllBalances(_ context.Context, _ sdk.AccAddress) sdk.Coins {
+	return sdk.NewCoins(sdk.NewInt64Coin("usyreen", 1000000))
+}
 
 // ---------- Mock MsgRouter ----------
 
