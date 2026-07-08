@@ -322,6 +322,16 @@ func (k Keeper) SubmitIntent(ctx context.Context, msg *types.MsgSubmitIntent) (s
 	}
 	expiry := sdkCtx.BlockHeight() + int64(expiryBlocks)
 
+	// The solver auction runs at created + SolvingWindow, and FulfillIntent
+	// rejects an intent whose hard Expiry has passed. If Expiry <= the solving
+	// deadline (e.g. the CLI's default ExpiryBlocks happens to equal SolvingWindow),
+	// the intent hard-expires on the exact block the auction fires and can never be
+	// fulfilled. Guarantee a margin past the solving deadline regardless of the
+	// requested expiry so every intent gets a real chance to be settled.
+	if minExpiry := sdkCtx.BlockHeight() + int64(params.SolvingWindow) + 10; expiry < minExpiry {
+		expiry = minExpiry
+	}
+
 	intent := types.Intent{
 		ID:         intentID,
 		Creator:    msg.Creator,
@@ -902,7 +912,31 @@ func (k *Keeper) executeSolutionMsgs(ctx context.Context, solution *types.Soluti
 		// and is rejected — which silently broke ALL solution execution.
 		var sdkMsg sdk.Msg
 		if err := k.cdc.UnmarshalInterfaceJSON(rawMsg, &sdkMsg); err != nil {
-			return fmt.Errorf("failed to decode execution msg %d: %w", i, err)
+			// Fallback for HAND-ROLLED custom types (e.g. /syreen.dex.MsgSwap) that
+			// lack gogoproto jsonpb support and so can't be decoded by the interface
+			// JSON path above. Resolve the concrete type from the registry by its
+			// "@type" and json.Unmarshal via its struct tags. Standard cosmos types
+			// still take the jsonpb path. Signer resolution + whitelist + the balance
+			// invariants below all run identically on the result, so this widens what
+			// can be decoded WITHOUT weakening any security check.
+			var disc struct {
+				Type string `json:"@type"`
+			}
+			if jerr := json.Unmarshal(rawMsg, &disc); jerr != nil || disc.Type == "" {
+				return fmt.Errorf("failed to decode execution msg %d: %w", i, err)
+			}
+			resolved, rerr := k.cdc.InterfaceRegistry().Resolve(disc.Type)
+			if rerr != nil {
+				return fmt.Errorf("failed to decode execution msg %d (type %s): %w", i, disc.Type, rerr)
+			}
+			if jerr := json.Unmarshal(rawMsg, resolved); jerr != nil {
+				return fmt.Errorf("failed to decode execution msg %d (type %s): %w", i, disc.Type, jerr)
+			}
+			m, ok := resolved.(sdk.Msg)
+			if !ok {
+				return fmt.Errorf("execution msg %d (type %s) is not an sdk.Msg", i, disc.Type)
+			}
+			sdkMsg = m
 		}
 
 		// C-11: Check message type against whitelist

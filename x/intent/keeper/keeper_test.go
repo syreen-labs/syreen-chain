@@ -311,6 +311,11 @@ func TestGetSolver_NotFound(t *testing.T) {
 
 func TestSubmitIntent_Success(t *testing.T) {
 	k, ctx := setupKeeper(t)
+	// Small solving window so the expiry-must-exceed-solving-deadline margin
+	// doesn't override the requested 50-block expiry.
+	p := k.GetParams(ctx)
+	p.SolvingWindow = 1
+	require.NoError(t, k.SetParams(ctx, p))
 
 	msg := &types.MsgSubmitIntent{
 		Creator:      creatorAddr,
@@ -329,7 +334,7 @@ func TestSubmitIntent_Success(t *testing.T) {
 	require.True(t, found)
 	require.Equal(t, creatorAddr, intent.Creator)
 	require.Equal(t, types.StatusPending, intent.Status)
-	require.Equal(t, int64(51), intent.Expiry) // block 1 + 50
+	require.Equal(t, int64(51), intent.Expiry) // block 1 + 50 (> solving deadline 1+1)
 }
 
 func TestSubmitIntent_SequentialIDs(t *testing.T) {
@@ -908,8 +913,9 @@ func TestExpireIntents_RefundsCreator(t *testing.T) {
 	require.True(t, found)
 	require.Equal(t, types.StatusPending, intent.Status)
 
-	// Advance past expiry (created at block 1, expiry = 1 + 10 = 11)
-	ctx = ctx.WithBlockHeight(12)
+	// Advance past the intent's actual hard expiry (which is bumped to exceed the
+	// solving deadline), then expire.
+	ctx = ctx.WithBlockHeight(intent.Expiry + 1)
 	k.ExpireIntents(ctx)
 
 	// Intent should now be expired
@@ -1117,9 +1123,9 @@ func TestSubmitSolution_IntentExpired(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	intentID := registerSolverAndIntent(t, k, ctx)
 
-	// Advance past intent expiry but within solving window conceptually
-	// Intent expires at block 51, so go past that
-	ctx = ctx.WithBlockHeight(52)
+	// Advance past the intent's actual hard expiry.
+	in, _ := k.GetIntent(ctx, intentID)
+	ctx = ctx.WithBlockHeight(in.Expiry + 1)
 
 	err := k.SubmitSolution(ctx, &types.MsgSubmitSolution{
 		SolverAddr:      solverAddr,
@@ -1214,8 +1220,8 @@ func TestExpireIntents_SolvingStatusAlsoExpires(t *testing.T) {
 	intent.Status = types.StatusSolving
 	k.SetIntent(ctx, intent)
 
-	// Advance past expiry
-	ctx = ctx.WithBlockHeight(12)
+	// Advance past the intent's actual hard expiry
+	ctx = ctx.WithBlockHeight(intent.Expiry + 1)
 	k.ExpireIntents(ctx)
 
 	intent, found := k.GetIntent(ctx, id)

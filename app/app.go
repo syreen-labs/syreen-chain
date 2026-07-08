@@ -1344,6 +1344,19 @@ func NewSyreenApp(
 		},
 	)
 
+	// v2.4.2: pure code upgrade (no param change). Fixes: (1) intent solution
+	// execution can now decode hand-rolled custom messages (e.g. /syreen.dex.MsgSwap)
+	// so the best-execution auction can actually settle a swap; (2) SubmitIntent
+	// guarantees the hard expiry is past the solving deadline so intents can't
+	// hard-expire on the exact block the auction fires.
+	app.UpgradeKeeper.SetUpgradeHandler("v2.4.2",
+		func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			logger.Info("applying v2.4.2 upgrade: intent swap-settlement decode + expiry-margin fixes", "height", sdkCtx.BlockHeight())
+			return app.mm.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
+
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
 			// If latest version is corrupt (e.g. mid-commit crash), try
